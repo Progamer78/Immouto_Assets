@@ -79,9 +79,13 @@
     "scope": "Positive absent numeric row read only; writes and arbitrary absent fields were not tested."
   },
   "encoded_event_calls": {
-    "verified": false,
+    "verified": true,
     "target": 600094,
-    "status": "Exploratory probes were inconclusive. The native runtime stops explicitly; no addressing behavior is assumed."
+    "encoding": "600100 + offset from current common event ID",
+    "resolved_target_from_common_270": 264,
+    "method": "Inspected original call addressing and ran an isolated four-event fixture: event 0 calls 600102; event 2 sets V0=2 and calls 600099; event 1 adds 10. A final blank command record is retained in every event.",
+    "expected_result": 12,
+    "observed_result": 12
   },
   "local_asset_package": {
     "bytes": 990994485,
@@ -90,5 +94,40 @@
     "zip_crc_checked": true,
     "uploaded": false
   },
-  "device_tested": false
+  "device_tested": false,
+  "title_menu": {
+    "native_opening_prompt_captured": true,
+    "native_menu_captured": true,
+    "windows_menu_captured": true,
+    "reference_input": "Only the copied authoritative title-map keyboard poll at byte 23304 is replaced with a confirm result. BasicData.wolf and the original menu/common logic are retained.",
+    "native_input": [
+      {
+        "frame": 60,
+        "confirm": true
+      },
+      {
+        "frame": 61
+      }
+    ],
+    "native_capture_frame": 150,
+    "native_bmp_sha256": "b9c091bbb1ece9bad345617efab0619baaa90d87a922b423d29eaf575e57c291",
+    "limits": "Visual presence checked. Random background variants differ; text metrics, exact timing and device audio remain unverified."
+  },
+  "original_data_sha256": {
+    "Data/BasicData/Game.dat": "459701863ff222d7a8b0bc8f9c83a7087ec0a141e890e4dd7f41f9bdaab54910",
+    "Data/BasicData/CommonEvent.dat": "53ea9d20294dfc572429c52428d022928607ba628e5096e2a3a0efe289f392d4",
+    "Data/BasicData/DataBase.dat": "75aff42103b5f9b204352a99ffa07bfdbfb25d73e6500003d7f8b80bf8cd1ee8",
+    "Data/BasicData/CDataBase.dat": "1308e82381eeaf498a457dfb1b4b20ab73d5359189cd06855c62fedb0bcb1863",
+    "Data/BasicData/SysDatabase.dat": "1f1b6b2ed31a945c9590c6c2eb7dc6aec3a147aa8d533edba71f9ff4be4c38d2",
+    "Data/BasicData/TileSetData.dat": "16173a0c24d7d7ce9e1009be28051647a2865b639054f8ee8709bb62f06d17c1",
+    "Data/MapData/Dungeon.mps": "e0b9f74fef18205fc3376fb9a66c99c4958485f65dd250a9888f9923d0bc6957",
+    "Data/MapData/Map002.mps": "158bb21680e2e6f7914c3a03c8bc22d62cd2fa8eea12178c4ae54c83ad38adf7",
+    "Data/MapData/Map003.mps": "44221f96069b32888e216b58a5dd8a7d7beffc4ad58afa38273fb0ab26605ce9",
+    "Data/MapData/Map024.mps": "3b14c47b94162726cac5d5f853173fe0fa76906681df216fdef5945d5ffc30d5",
+    "Data/MapData/Map031.mps": "1b1c52f57a340694e23dfefce83fbc5aaed157b8af35a0f0852b96b351d09c86",
+    "Data/MapData/SampleMapA.mps": "a28d30576475a7252b5b8d7b428ccc4281965a927afd0a7f6f061f7e35560f80",
+    "Data/MapData/SampleMapA_1.mps": "4354e920423b2708af8d260209ededa757c2c84db2ca0d818622fe1b5790e454",
+    "Data/MapData/SampleMapB.mps": "53bc88e60f21a238a4621aa80b2855439e2f2a22b3f2fa1184397bba0f94c3f1",
+    "Data/MapData/TitleMap.mps": "0fc65032e31e7c6dfa9a822ced81a4c8081320fd283b63368642afd86b3774b1"
+  }
 }

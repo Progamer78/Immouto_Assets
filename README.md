@@ -25,7 +25,7 @@ python tools/prepare_game.py --stage
 build/windows-app/WolfPort.exe build/game
 ```
 
-The frontend currently stops during real startup. A successful compile does not imply title-screen or gameplay compatibility. Development snapshots are written to the app's user preference directory, not into the original game's Save directory.
+The frontend now renders the opening prompt and main title menu from the original data. Recorded keyboard input selects New Game, which currently stops at the first map-transfer command. This is not yet a playable game. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
 
 With an existing C++17 toolchain and CMake, the portable core can instead be built without SDL:
 

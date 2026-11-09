@@ -25,7 +25,8 @@ Json load_json(const std::string& filename) {
     return Json::parse(stream);
 }
 
-Runtime::Runtime(Json project, std::string save_root) : project_(std::move(project)), save_root_(std::move(save_root)) {
+Runtime::Runtime(Json project, std::string save_root, std::string asset_root) : project_(std::move(project)),
+    save_root_(std::move(save_root)), asset_root_(std::move(asset_root)), resources_(std::make_shared<Resources>(asset_root_)) {
     if (project_.at("format") != "wolf-ios-ir" || project_.at("version") != 1)
         fail("Unsupported intermediate data version");
     std::uint64_t fingerprint = 14695981039346656037ULL;
@@ -44,6 +45,7 @@ Runtime::Runtime(Json project, std::string save_root) : project_(std::move(proje
         project_.at("game").at("width") == 640 && project_.at("game").at("height") == 480 ? 1 :
         project_.at("game").at("width") == 800 && project_.at("game").at("height") == 600 ? 2 : -1;
     for (int ref = 9000100; ref <= 9000102; ++ref) numbers_[ref] = 100;
+    numbers_[9000020] = -1;
 }
 
 void Runtime::fail(const std::string& message) const { throw std::runtime_error(message); }
@@ -269,6 +271,8 @@ void Runtime::tick(const Input& input) {
     if (!error_.empty() || quit_) return;
     input_ = input;
     try {
+        if (choice_clear_after_ && frame_ >= choice_clear_after_) { set_number(9000020, -1); choice_clear_after_ = 0; }
+        advance_pictures();
         for (auto& route : routes_) advance_route(route);
         routes_.erase(std::remove_if(routes_.begin(), routes_.end(), [&](const Route& r) {
             return r.pc >= r.source.at("route").at("commands").size() && r.wake <= frame_;
@@ -288,6 +292,8 @@ void Runtime::tick(const Input& input) {
             run.waiting_route = 0; run.waiting_all_routes = false; advance(run);
         }
         runs_.erase(std::remove_if(runs_.begin(), runs_.end(), [](const Run& r) { return r.stack.empty(); }), runs_.end());
+        advance_choice();
+        previous_input_ = input_;
         ++frame_;
     } catch (const std::exception& error) { error_ = error.what(); }
     try { flush_saves(); } catch (const std::exception& error) { error_ = error.what(); }
@@ -330,8 +336,15 @@ void Runtime::call(Run& run, const Json& cmd) {
         const auto name = expand(cmd.at("strings").at(0), caller);
         for (const auto& e : project_.at("common").at("events")) if (e.at("name") == name) { id = e.at("id"); break; }
     } else {
-        const int target = number(arg(cmd, 0), caller);
-        if (target >= 600000 && target < 700000) fail("Encoded event-call addressing is not implemented: " + std::to_string(target));
+        int target = number(arg(cmd, 0), caller);
+        if (target >= 600000) {
+            if (caller.common < 0) fail("Relative common call outside a common event is not verified");
+            // The original engine encodes relative IDs around 600100, not a
+            // variable address. 600094 from common 270 therefore calls 264.
+            const auto relative = static_cast<std::int64_t>(caller.common) + target - 600100;
+            const auto last = static_cast<std::int64_t>(project_.at("common").at("events").size()) - 1;
+            target = 500000 + static_cast<int>(std::clamp(relative, std::int64_t{0}, last));
+        }
         if (target < 500000 || target >= 600000) fail("Map-event insertion is not implemented");
         id = target - 500000;
     }
@@ -362,19 +375,158 @@ void Runtime::picture(const Json& cmd, Context c) {
     const int id = number(arg(cmd, 1), c);
     const auto name = std::to_string(id);
     if (operation == 2) {
-        if (cmd.at("args").size() > 3 || (flags & 0x01000000)) fail("Picture range/faded erase is not implemented");
-        pictures_.erase(name); return;
+        if (cmd.at("args").size() < 3 || cmd.at("args").size() > 4 || (flags & 0x0fff0000))
+            fail("Unsupported picture erase range/options");
+        const int duration = std::max(0, number(arg(cmd, 2), c));
+        const int delay = cmd.at("args").size() == 4 ? std::max(0, number(arg(cmd, 3), c)) : 0;
+        if (delay) pending_picture_erases_.push_back({{"id", id}, {"duration", duration}, {"start", frame_ + delay}});
+        else erase_picture(id, duration);
+        return;
     }
     if (operation != 0) fail("Picture movement and interpolation are not implemented yet");
-    const int kind = (flags >> 4) & 7;
-    if ((flags & 0x0ff00000) || cmd.at("args").size() != (kind == 2 || kind == 4 ? 12 : 11))
+    const int kind = (flags >> 4) & 15;
+    const bool variable_file = kind == 1 || kind == 4;
+    if ((flags & 0x0fff0000) || kind > 4 || cmd.at("args").size() != (variable_file ? 12 : 11))
         fail("Unsupported picture transform layout");
-    const auto content = kind == 2 || kind == 4 ? text(arg(cmd, 11), c) : cmd.at("strings").at(0).get<std::string>();
+    const int duration = std::max(0, number(arg(cmd, 2), c));
+    const auto content = variable_file ? text(arg(cmd, 11), c) : cmd.at("strings").at(0).get<std::string>();
+    const Json previous = pictures_.contains(name) ? pictures_.at(name) : Json::object();
     pictures_[name] = {{"id", id}, {"kind", kind}, {"content", expand(content, c)},
         {"div_x", arg(cmd, 3)}, {"div_y", arg(cmd, 4)}, {"pattern", number(arg(cmd, 5), c)},
         {"opacity", number(arg(cmd, 6), c)}, {"x", number(arg(cmd, 7), c)}, {"y", number(arg(cmd, 8), c)},
         {"zoom", number(arg(cmd, 9), c)}, {"angle", number(arg(cmd, 10), c)},
         {"anchor", (flags >> 12) & 15}, {"blend", (flags >> 8) & 15}};
+    auto& picture = pictures_.at(name);
+    if (kind == 2) {
+        picture["text_style"] = {{"size", number(9000008)}, {"shadow", number(9000021)},
+            {"speed", number(9000011)}, {"antialias", project_.at("game").value("flags", Json::array()).size() > 14 ?
+                project_.at("game").at("flags").at(14).get<int>() : 0}};
+    }
+    if (previous.contains("flicker")) picture["flicker"] = previous.at("flicker");
+    if (duration) {
+        Json from = Json::object(), to = Json::object();
+        for (const char* field : {"opacity", "x", "y", "zoom", "angle"}) {
+            to[field] = picture.at(field);
+            from[field] = previous.contains(field) ? previous.at(field) : std::string(field) == "opacity" ? Json(0) : picture.at(field);
+            picture[field] = from.at(field);
+        }
+        picture["tween"] = {{"start", frame_}, {"duration", duration}, {"from", from}, {"to", to}};
+    }
+}
+
+void Runtime::erase_picture(int id, int duration) {
+    const auto name = std::to_string(id);
+    if (!pictures_.contains(name)) return;
+    if (duration == 0) { pictures_.erase(name); return; }
+    auto& picture = pictures_.at(name);
+    picture["fade_erase"] = {{"start", frame_}, {"duration", duration}, {"opacity", picture.at("opacity")}};
+}
+
+void Runtime::advance_pictures() {
+    for (auto it = pending_picture_erases_.begin(); it != pending_picture_erases_.end();) {
+        if (it->at("start").get<std::uint64_t>() <= frame_) {
+            erase_picture(it->at("id"), it->at("duration")); it = pending_picture_erases_.erase(it);
+        } else ++it;
+    }
+    for (auto it = pictures_.begin(); it != pictures_.end();) {
+        auto& picture = it.value();
+        if (picture.contains("tween")) {
+            const auto& tween = picture.at("tween");
+            const auto start = tween.at("start").get<std::uint64_t>();
+            const auto duration = tween.at("duration").get<std::uint64_t>();
+            const auto age = std::min(frame_ >= start ? frame_ - start : 0, duration);
+            for (const auto& [field, to] : tween.at("to").items()) {
+                const auto from = tween.at("from").at(field).get<std::int64_t>();
+                picture[field] = from + (to.get<std::int64_t>() - from) * static_cast<std::int64_t>(age) / static_cast<std::int64_t>(duration);
+            }
+            if (age == duration) picture.erase("tween");
+        }
+        if (!picture.contains("fade_erase")) { ++it; continue; }
+        const auto& fade = picture.at("fade_erase");
+        const auto start = fade.at("start").get<std::uint64_t>();
+        const auto duration = fade.at("duration").get<std::uint64_t>();
+        const auto age = frame_ >= start ? frame_ - start : 0;
+        if (age >= duration) { it = pictures_.erase(it); continue; }
+        picture["opacity"] = static_cast<int>(fade.at("opacity").get<std::int64_t>() * (duration - age) / duration);
+        ++it;
+    }
+}
+
+void Runtime::picture_effect(const Json& cmd, Context c) {
+    const int options = arg(cmd, 0), type = (options >> 4) & 15;
+    if ((options & ~255) || (options & 15) != 0 || cmd.at("args").size() != 7 || (type != 5 && type != 6))
+        fail("Unsupported picture-effect target or layout");
+    const int duration = std::max(0, number(arg(cmd, 1), c));
+    const int first = number(arg(cmd, 2), c), last = number(arg(cmd, 3), c);
+    const Json color = Json::array({number(arg(cmd, 4), c), number(arg(cmd, 5), c), number(arg(cmd, 6), c)});
+    for (auto& picture : pictures_) {
+        const int id = picture.at("id");
+        if (id < first || id > last) continue;
+        if (duration == 0 || (color.at(0) == 0 && color.at(1) == 0 && color.at(2) == 0)) picture.erase("flicker");
+        else picture["flicker"] = {{"type", type}, {"duration", duration}, {"start", frame_ + 1}, {"color", color}};
+    }
+}
+
+void Runtime::show_choice(Run& run, const Json& cmd) {
+    auto& frame = run.stack.back();
+    const int flags = arg(cmd, 0), count = flags & 15, cancel = (flags >> 4) & 15;
+    if ((flags & ~255) || cmd.at("args").size() != 1 || count < 1 || count != static_cast<int>(cmd.at("strings").size()) || cancel > count + 1)
+        fail("Unsupported choice-command layout");
+    if (choice_.empty()) {
+        Json strings = Json::array();
+        for (const auto& text : cmd.at("strings")) strings.push_back(expand(text, frame.context));
+        choice_ = {{"owner", run.owner}, {"pc", frame.pc - 1}, {"common", frame.context.common},
+            {"strings", strings}, {"selected", std::clamp(number(9000007), 0, count - 1)}, {"cancel", cancel},
+            {"opened", frame_}, {"repeat", 0}, {"done", false}, {"x", number(9000003)}, {"y", number(9000004)}};
+        set_number(9000020, choice_.at("selected"));
+        choice_clear_after_ = 0;
+    }
+    if (choice_.at("owner") != run.owner || choice_.at("common") != frame.context.common || choice_.at("pc") != frame.pc - 1 || !choice_.at("done").get<bool>()) {
+        --frame.pc; run.wake = frame_ + 1; return;
+    }
+    const int selected = choice_.at("selected");
+    choice_ = Json::object(); set_number(9000007, 0); choice_clear_after_ = frame_ + 1;
+    const int indent = cmd.at("indent");
+    const auto& list = commands(frame.context);
+    for (; frame.pc < list.size(); ++frame.pc) {
+        const auto& candidate = list.at(frame.pc);
+        if (candidate.at("indent") != indent) continue;
+        const int code = candidate.at("code");
+        if ((selected == -2 && code == 421) || (selected >= 0 && code == 401 && arg(candidate, 0) == selected + 2)) { ++frame.pc; return; }
+        if (code == 499) break;
+    }
+    fail("Choice has no matching branch");
+}
+
+void Runtime::advance_choice() {
+    if (choice_.empty() || choice_.at("done") == true || choice_.at("opened").get<std::uint64_t>() == frame_) return;
+    const int count = static_cast<int>(choice_.at("strings").size());
+    int selected = std::clamp(number(9000020), 0, count - 1);
+    int direction = input_.up ? -1 : input_.down ? 1 : 0;
+    const bool new_direction = (input_.up && !previous_input_.up) || (input_.down && !previous_input_.down);
+    if (input_.wheel) { direction = input_.wheel > 0 ? -1 : 1; choice_["repeat"] = frame_; }
+    if (direction && (new_direction || frame_ >= choice_.at("repeat").get<std::uint64_t>())) {
+        selected = (selected + direction + count) % count;
+        choice_["repeat"] = frame_ + std::max(1, number(new_direction ? 9000015 : 9000016));
+    }
+    bool done = (input_.confirm && !previous_input_.confirm) || input_.mouse_left_new;
+    const int cancel = choice_.at("cancel");
+    if (input_.cancel && !previous_input_.cancel && cancel != 1) { selected = cancel == 0 ? -2 : cancel - 2; done = true; }
+    choice_["selected"] = selected; choice_["done"] = done; set_number(9000020, selected);
+}
+
+std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame) {
+    std::array<double, 3> result{100, 100, 100};
+    if (!picture.contains("flicker")) return result;
+    const auto& flicker = picture.at("flicker");
+    const auto start = flicker.at("start").get<std::uint64_t>();
+    const auto duration = flicker.at("duration").get<std::uint64_t>();
+    if (duration == 0 || frame < start) return result;
+    const double phase = static_cast<double>((frame - start) % (duration * 2)) / duration;
+    const double amount = flicker.at("type") == 5 ? (phase <= 1 ? phase : 2 - phase) :
+        1 - static_cast<double>((frame - start) % duration) / duration;
+    for (int i = 0; i < 3; ++i) result[i] = std::clamp(100 + flicker.at("color").at(i).get<double>() * amount, 0.0, 200.0);
+    return result;
 }
 
 void Runtime::execute(Run& run, const Json& cmd) {
@@ -383,10 +535,33 @@ void Runtime::execute(Run& run, const Json& cmd) {
     auto value = [&](std::size_t i) { return number(arg(cmd, i), context); };
     switch (code) {
     case 0: case 99: case 103: case 212: case 499: return;
+    case 102: show_choice(run, cmd); return;
     case 111: {
         std::vector<bool> conditions;
         for (int i = 0, n = arg(cmd, 0) & 15; i < n; ++i)
             conditions.push_back(compare(value(1 + 3 * i), value(2 + 3 * i), arg(cmd, 3 + 3 * i) & 255));
+        branch(f, indent, conditions); return;
+    }
+    case 112: {
+        const int count = arg(cmd, 0) & 15;
+        if (count < 1 || count > 8 || (arg(cmd, 0) & ~31)) fail("Unsupported string-condition layout");
+        std::size_t next_value = 1 + count;
+        std::vector<bool> conditions;
+        for (int i = 0; i < count; ++i) {
+            const auto packed = static_cast<std::uint32_t>(arg(cmd, 1 + i));
+            const int options = packed >> 24;
+            if (options & 14) fail("Unsupported string-condition flags");
+            const auto left = text(packed & 0xffffff, context);
+            const auto right = options & 1 ? text(arg(cmd, next_value++), context) : cmd.at("strings").at(i).get<std::string>();
+            switch (options >> 4) {
+            case 0: conditions.push_back(left == right); break;
+            case 1: conditions.push_back(left != right); break;
+            case 2: conditions.push_back(left.find(right) != std::string::npos); break;
+            case 3: conditions.push_back(left.compare(0, right.size(), right) == 0); break;
+            default: fail("Unsupported string comparison operator");
+            }
+        }
+        if (next_value != cmd.at("args").size()) fail("Unexpected string-condition operands");
         branch(f, indent, conditions); return;
     }
     case 401: case 420: case 421: {
@@ -451,9 +626,19 @@ void Runtime::execute(Run& run, const Json& cmd) {
         set_number(destination, result, context);
         return;
     }
-    case 122:
-        if (arg(cmd, 1) != 0) fail("String operations other than literal assignment are not implemented");
-        set_text(arg(cmd, 0), expand(cmd.at("strings").at(0), context), context); return;
+    case 122: string_operation(cmd, context); return;
+    case 140: {
+        const int kind = (arg(cmd, 0) >> 4) & 15;
+        if (kind > 2 || arg(cmd, 0) != (0x02000000 | (kind << 4)) ||
+            cmd.at("args").size() != (kind == 2 ? 6 : 7) || value(2) != 0 || (kind == 2 && value(1) != 0))
+            fail("Unsupported sound-command layout (filename playback only)");
+        if (value(5) <= 0) fail("Sound frequency must be positive");
+        audio_.push_back({{"operation", "play"}, {"kind", kind}, {"file", expand(cmd.at("strings").at(0), context)},
+            {"channel", kind == 2 ? value(3) : 0}, {"volume", value(4)}, {"tempo", value(5)},
+            {"start_ms", kind == 2 ? 0 : std::max(0, value(3))}, {"loop_ms", kind == 2 ? 0 : value(6)},
+            {"fade_ms", kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_.at("game").at("fps").get<int>()}});
+        return;
+    }
     case 123: {
         const int options = arg(cmd, 1), kind = (options >> 8) & 15;
         int pressed = 0;
@@ -626,6 +811,7 @@ void Runtime::execute(Run& run, const Json& cmd) {
     case 175: quit_ = true; run.stack.clear(); return;
     case 180: run.wake = frame_ + static_cast<std::uint64_t>(std::max(0, value(0))); return;
     case 210: case 300: call(run, cmd); return;
+    case 290: picture_effect(cmd, context); return;
     case 213: {
         const auto& list = commands(context); const auto label = expand(cmd.at("strings").at(0), context);
         for (std::size_t i = 0; i < list.size(); ++i)
@@ -674,18 +860,20 @@ Json Runtime::snapshot() const {
         {"target", route.target}, {"source", route.source}, {"common", route.context.common},
         {"event", route.context.event}, {"page", route.context.page}, {"map", route.context.map}});
     std::ostringstream rng; rng << random_;
-    return {{"format", "wolf-ios-state"}, {"version", 2}, {"title", project_.at("game").at("title")}, {"project_id", project_id_},
+    return {{"format", "wolf-ios-state"}, {"version", 3}, {"title", project_.at("game").at("title")}, {"project_id", project_id_},
         {"frame", frame_}, {"map", map_}, {"hero_x", hero_x_}, {"hero_y", hero_y_},
         {"numbers", numbers}, {"strings", strings}, {"databases", databases_}, {"pictures", pictures_},
         {"runs", runs}, {"rng", rng.str()}, {"message", message_}, {"transition", transition_},
-        {"characters", characters_}, {"party", party_}, {"routes", routes}, {"next_route", next_route_}};
+        {"characters", characters_}, {"party", party_}, {"routes", routes}, {"next_route", next_route_},
+        {"pending_picture_erases", pending_picture_erases_}, {"choice", choice_}, {"choice_clear_after", choice_clear_after_},
+        {"previous_input", {{"up", previous_input_.up}, {"down", previous_input_.down}, {"confirm", previous_input_.confirm}, {"cancel", previous_input_.cancel}}}};
 }
 
 void Runtime::restore(const Json& state) {
-    if (state.at("format") != "wolf-ios-state" || state.at("version") != 2 ||
+    if (state.at("format") != "wolf-ios-state" || state.at("version") != 3 ||
         state.at("title") != project_.at("game").at("title") || state.at("project_id") != project_id_)
         fail("Incompatible native save: source game data differs");
-    Runtime candidate(project_, save_root_);
+    Runtime candidate(project_, save_root_, asset_root_);
     candidate.frame_ = state.at("frame"); candidate.map_ = state.at("map");
     candidate.hero_x_ = state.at("hero_x"); candidate.hero_y_ = state.at("hero_y");
     candidate.numbers_.clear();
@@ -693,6 +881,21 @@ void Runtime::restore(const Json& state) {
     for (const auto& [key, value] : state.at("strings").items()) candidate.strings_[std::stoull(key)] = value;
     candidate.databases_ = state.at("databases"); candidate.pictures_ = state.at("pictures");
     candidate.transition_ = state.at("transition");
+    candidate.choice_ = state.at("choice"); candidate.choice_clear_after_ = state.at("choice_clear_after");
+    if (!candidate.choice_.empty()) {
+        const int selected = candidate.choice_.at("selected");
+        if (!candidate.choice_.at("strings").is_array() || selected < -2 || selected >= static_cast<int>(candidate.choice_.at("strings").size()))
+            fail("Invalid saved choice state");
+    }
+    const auto& previous_input = state.at("previous_input");
+    candidate.previous_input_.up = previous_input.at("up"); candidate.previous_input_.down = previous_input.at("down");
+    candidate.previous_input_.confirm = previous_input.at("confirm"); candidate.previous_input_.cancel = previous_input.at("cancel");
+    candidate.pending_picture_erases_ = state.at("pending_picture_erases");
+    if (!candidate.pending_picture_erases_.is_array()) fail("Invalid delayed-picture state");
+    for (const auto& erase : candidate.pending_picture_erases_) {
+        (void)erase.at("id").get<int>(); (void)erase.at("start").get<std::uint64_t>();
+        if (erase.at("duration").get<int>() < 0) fail("Invalid delayed-picture duration");
+    }
     candidate.characters_ = state.at("characters"); candidate.party_ = state.at("party"); candidate.next_route_ = state.at("next_route");
     for (const auto& item : state.at("routes")) {
         Route route; route.id = item.at("id"); route.wake = item.at("wake"); route.pc = item.at("pc");

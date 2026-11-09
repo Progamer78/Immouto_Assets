@@ -1,6 +1,9 @@
 #include "runtime.hpp"
 #include "asset_cache.hpp"
 #include "crash_log.hpp"
+#include "input_replay.hpp"
+#include "audio.hpp"
+#include "text.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -53,17 +56,30 @@ struct Texture {
     ~Texture() { if (value) SDL_DestroyTexture(value); }
 };
 struct Assets {
-    fs::path root;
+    wolf::Resources resources;
     SDL_Renderer* renderer;
     std::map<std::string, std::unique_ptr<Texture>> textures;
-    explicit Assets(fs::path path, SDL_Renderer* output) : root(std::move(path)), renderer(output) {}
+    TextRasterizer text;
+    explicit Assets(fs::path path, SDL_Renderer* output, const Json& project) : resources(path.u8string()), renderer(output),
+        text(path, project.at("game"), project.at("databases").at("system").at("types").at(12).at("rows")) {}
+    Texture& text_picture(const Json& picture) {
+        const auto key = std::string("text:") + picture.at("text_style").dump() + picture.at("content").get<std::string>();
+        auto& slot = textures[key];
+        if (!slot) {
+            auto pixels = text.render(picture.at("content"), picture.at("text_style"));
+            SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(pixels.rgba.data(), pixels.width, pixels.height, 32, pixels.width * 4, SDL_PIXELFORMAT_RGBA32);
+            if (!surface) throw std::runtime_error(SDL_GetError());
+            auto texture = std::make_unique<Texture>(); texture->value = SDL_CreateTextureFromSurface(renderer, surface);
+            texture->width = pixels.width; texture->height = pixels.height; SDL_FreeSurface(surface);
+            if (!texture->value) throw std::runtime_error(SDL_GetError());
+            slot = std::move(texture);
+        }
+        return *slot;
+    }
     Texture& image(const std::string& filename) {
         auto& slot = textures[filename];
         if (!slot) {
-            fs::path relative = fs::u8path(filename);
-            if (relative.is_absolute()) throw std::runtime_error("Absolute resource path is not allowed");
-            for (const auto& part : relative) if (part == "..") throw std::runtime_error("Resource path escapes game directory");
-            const auto bytes = read_bytes(root / "Data" / relative);
+            const auto bytes = read_bytes(resources.path("Data/" + filename));
             int width = 0, height = 0, channels = 0;
             stbi_uc* pixels = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
             if (!pixels) throw std::runtime_error("Image decoding failed: " + filename);
@@ -80,15 +96,15 @@ struct Assets {
     }
 };
 
-void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures) {
+void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures, std::uint64_t frame) {
     std::vector<const Json*> ordered;
     for (const auto& item : pictures) ordered.push_back(&item);
     std::sort(ordered.begin(), ordered.end(), [](const Json* a, const Json* b) { return a->at("id").get<int>() < b->at("id").get<int>(); });
     for (const Json* ptr : ordered) {
         const auto& p = *ptr;
         const int kind = p.at("kind");
-        if (kind != 0 && kind != 2) throw std::runtime_error("Picture text/window rendering is not implemented yet; picture " + std::to_string(p.at("id").get<int>()));
-        auto& texture = assets.image(p.at("content"));
+        if (kind > 2) throw std::runtime_error("Picture window rendering is not implemented yet; picture " + std::to_string(p.at("id").get<int>()));
+        auto& texture = kind == 2 ? assets.text_picture(p) : assets.image(p.at("content"));
         const int dx = p.at("div_x"), dy = p.at("div_y"), pattern = p.at("pattern");
         if (dx < 1 || dy < 1 || pattern < 1 || pattern > dx * dy)
             throw std::runtime_error("Invalid picture sprite-sheet pattern");
@@ -98,18 +114,39 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures)
         SDL_FRect destination{p.at("x"), p.at("y"), width * zoom, height * zoom};
         const int anchor = p.at("anchor");
         if (anchor == 1) { destination.x -= destination.w / 2; destination.y -= destination.h / 2; }
+        else if (anchor == 2) destination.y -= destination.h;
+        else if (anchor == 3) destination.x -= destination.w;
+        else if (anchor == 4) { destination.x -= destination.w; destination.y -= destination.h; }
+        else if (anchor == 5) destination.x -= destination.w / 2;
+        else if (anchor == 6) { destination.x -= destination.w / 2; destination.y -= destination.h; }
         else if (anchor != 0) throw std::runtime_error("Unsupported picture anchor");
         const int blend = p.at("blend");
-        if (blend > 2) throw std::runtime_error("Unsupported picture blend mode");
-        SDL_SetTextureBlendMode(texture.value, blend == 1 ? SDL_BLENDMODE_ADD : blend == 2 ? SDL_BLENDMODE_MUL : SDL_BLENDMODE_BLEND);
-        SDL_SetTextureAlphaMod(texture.value, static_cast<Uint8>(std::clamp(p.at("opacity").get<int>(), 0, 255)));
-        if (SDL_RenderCopyExF(renderer, texture.value, &source, &destination, p.at("angle"), nullptr, SDL_FLIP_NONE) != 0)
+        if (blend == 2 || blend > 3) throw std::runtime_error("Unsupported picture blend mode");
+        if (SDL_SetTextureBlendMode(texture.value, blend == 1 ? SDL_BLENDMODE_ADD : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND) != 0)
+            throw std::runtime_error(SDL_GetError());
+        SDL_SetTextureAlphaMod(texture.value, static_cast<Uint8>(blend == 3 ? 255 : std::clamp(p.at("opacity").get<int>(), 0, 255)));
+        const auto tint = wolf::picture_tint(p, frame);
+        for (double component : tint) if (component > 100) throw std::runtime_error("Picture color brightening is not implemented");
+        SDL_SetTextureColorMod(texture.value, static_cast<Uint8>(tint[0] * 255 / 100),
+            static_cast<Uint8>(tint[1] * 255 / 100), static_cast<Uint8>(tint[2] * 255 / 100));
+        const SDL_FPoint pivot{p.at("x").get<float>() - destination.x, p.at("y").get<float>() - destination.y};
+        if (SDL_RenderCopyExF(renderer, texture.value, &source, &destination, p.at("angle").get<double>() / 10, &pivot, SDL_FLIP_NONE) != 0)
             throw std::runtime_error(SDL_GetError());
     }
 }
 
 bool in_button(int x, int y, int index, int width, int height) {
     return y >= height && y < height + 64 && x >= index * width / 7 && x < (index + 1) * width / 7;
+}
+void capture_frame(SDL_Renderer* renderer, const char* filename, const wolf::Runtime& runtime) {
+    int width = 0, height = 0;
+    if (SDL_GetRendererOutputSize(renderer, &width, &height) != 0) throw std::runtime_error(SDL_GetError());
+    std::unique_ptr<SDL_Surface, decltype(&SDL_FreeSurface)> surface(
+        SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32), SDL_FreeSurface);
+    if (!surface || SDL_RenderReadPixels(renderer, nullptr, surface->format->format, surface->pixels, surface->pitch) != 0 ||
+        SDL_SaveBMP(surface.get(), filename) != 0) throw std::runtime_error(SDL_GetError());
+    auto evidence = runtime.diagnostics(); evidence["picture_records"] = runtime.pictures();
+    wolf::atomic_save(std::string(filename) + ".json", evidence);
 }
 }
 
@@ -160,24 +197,41 @@ int main(int argc, char** argv) {
             SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255); SDL_RenderFillRect(renderer, &bar); SDL_RenderPresent(renderer);
         });
 #endif
-        active_runtime = std::make_unique<wolf::Runtime>(wolf::load_json((game / "game.json").u8string()), (storage / "saves").u8string());
+        active_runtime = std::make_unique<wolf::Runtime>(wolf::load_json((game / "game.json").u8string()), (storage / "saves").u8string(), game.u8string());
         auto& runtime = *active_runtime;
         const int width = runtime.project().at("game").at("width"), height = runtime.project().at("game").at("height");
         const int fps = runtime.project().at("game").at("fps");
+        const char* capture_env = SDL_getenv("WOLF_CAPTURE_BMP");
+        const std::string capture_path = capture_env ? capture_env : "";
+        const char* capture_at = SDL_getenv("WOLF_CAPTURE_FRAME");
+        const int capture_target = capture_at ? SDL_atoi(capture_at) : 0;
+        if (!capture_path.empty() && capture_target < 1) throw std::runtime_error("WOLF_CAPTURE_FRAME must be positive when capturing");
+        const char* replay_path = SDL_getenv("WOLF_REPLAY_INPUT");
+        std::unique_ptr<wolf::InputReplay> replay;
+        if (replay_path) replay = std::make_unique<wolf::InputReplay>(wolf::load_json(replay_path));
         const std::string title = runtime.project().at("game").at("title");
         if (!window) window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height + 64,
-                                  SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+                                  SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (!capture_path.empty() ? SDL_WINDOW_HIDDEN : 0));
         if (!window) throw std::runtime_error(SDL_GetError());
         SDL_SetWindowTitle(window, title.c_str());
         if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
         if (!renderer) throw std::runtime_error(SDL_GetError());
         SDL_RenderSetLogicalSize(renderer, width, height + 64);
-        Assets assets(game, renderer);
+        Assets assets(game, renderer, runtime.project());
+        Audio audio(game);
         for (int i = 0; i < SDL_NumJoysticks(); ++i) if (SDL_IsGameController(i)) { controller = SDL_GameControllerOpen(i); break; }
         const auto save_path = storage / "resume.json";
         // Resume only snapshots made by this native runtime; Windows saves remain untouched.
-        if (fs::exists(save_path)) runtime.restore(wolf::load_json(save_path.u8string()));
+        if (fs::exists(save_path)) {
+            try { runtime.restore(wolf::load_json(save_path.u8string())); }
+            catch (const std::exception& error) {
+                const auto rejected = storage / ("resume-rejected-" + std::to_string(SDL_GetPerformanceCounter()) + ".json");
+                fs::rename(save_path, rejected);
+                wolf::atomic_save((storage / "resume-rejection.json").u8string(), {{"reason", error.what()}, {"preserved", rejected.filename().u8string()}});
+                SDL_Log("Preserved incompatible development resume: %s", error.what());
+            }
+        }
         Lifecycle lifecycle(&runtime, save_path);
         auto& paused = lifecycle.paused;
         bool running = true;
@@ -227,17 +281,25 @@ int main(int argc, char** argv) {
             input.sub = keys[SDL_SCANCODE_LSHIFT] || pad(SDL_CONTROLLER_BUTTON_X) || touch(6);
             if (input.mouse_y >= height) input.mouse_left_new = false;
             const double now = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
-            if (!paused) accumulator += std::min(now - last, 0.25);
+            if (!capture_path.empty()) accumulator = 1.0 / fps;
+            else if (!paused) accumulator += std::min(now - last, 0.25);
             last = now;
             int steps = 0;
             while (accumulator >= 1.0 / fps && steps++ < 8) {
-                { std::lock_guard<std::mutex> lock(lifecycle.guard); runtime.tick(input); }
+                { std::lock_guard<std::mutex> lock(lifecycle.guard); runtime.tick(replay ? replay->input(runtime.frame()) : input); }
+                audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
                 accumulator -= 1.0 / fps;
                 input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
             }
             if (steps >= 8) accumulator = 0;
+            audio.pause(paused);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
-            draw_pictures(renderer, assets, runtime.pictures());
+            draw_pictures(renderer, assets, runtime.pictures(), runtime.frame());
+            if (!runtime.choice().empty() && runtime.choice().at("done") == false) {
+                const auto& choice = runtime.choice();
+                const int y = choice.at("y");
+                if (y < height) throw std::runtime_error("Visible engine choice rendering is not implemented");
+            }
             for (int i = 0; i < 7; ++i) {
                 SDL_Rect rect{i * width / 7 + 3, height + 3, width / 7 - 6, 58};
                 SDL_SetRenderDrawColor(renderer, 56, 56, 56, 255); SDL_RenderFillRect(renderer, &rect);
@@ -255,13 +317,16 @@ int main(int argc, char** argv) {
                     SDL_RenderDrawLine(renderer, cx - 9, cy - 9, cx + 9, cy + 9); SDL_RenderDrawLine(renderer, cx - 9, cy + 9, cx + 9, cy - 9);
                 } else { SDL_Rect box{cx - 10, cy - 10, 20, 20}; SDL_RenderDrawRect(renderer, &box); }
             }
+            const bool captured = !capture_path.empty() && (runtime.frame() >= static_cast<std::uint64_t>(capture_target) || !runtime.error().empty());
+            if (captured) capture_frame(renderer, capture_path.c_str(), runtime);
             SDL_RenderPresent(renderer);
             if (!runtime.error().empty()) {
                 wolf::atomic_save((storage / "last-error.json").u8string(), runtime.diagnostics());
                 SDL_Log("Compatibility stop: %s", runtime.diagnostics().dump().c_str());
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Compatibility stop", runtime.error().c_str(), window);
+                if (capture_path.empty()) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Compatibility stop", runtime.error().c_str(), window);
                 result = 1; break;
             }
+            if (captured) break;
             SDL_Delay(paused ? 30 : 1);
         }
         if (runtime.error().empty()) {

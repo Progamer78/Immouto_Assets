@@ -7,6 +7,9 @@
 #include <vector>
 #include <atomic>
 #include <set>
+#include <memory>
+#include <array>
+#include "resources.hpp"
 
 namespace wolf {
 using Json = nlohmann::json;
@@ -47,7 +50,7 @@ struct Route {
 
 class Runtime {
 public:
-    explicit Runtime(Json project, std::string save_root = {});
+    explicit Runtime(Json project, std::string save_root = {}, std::string asset_root = {});
     void tick(const Input& input = {});
     void start_common(int id);
     std::int32_t number(int ref, Context context = {});
@@ -62,6 +65,7 @@ public:
     const Json& project() const { return project_; }
     const Json& pictures() const { return pictures_; }
     const Json& characters() const { return characters_; }
+    const Json& choice() const { return choice_; }
     const std::string& error() const { return error_; }
     const std::string& message() const { return message_; }
     std::uint64_t frame() const { return frame_; }
@@ -72,6 +76,9 @@ public:
 private:
     Json project_, databases_, pictures_ = Json::object(), audio_ = Json::array();
     Json transition_ = {{"id", -1}, {"frames", 0}, {"wait", false}};
+    Json pending_picture_erases_ = Json::array();
+    Json choice_ = Json::object();
+    std::uint64_t choice_clear_after_ = 0;
     Json characters_ = Json::object();
     Json party_ = {{"images", {"", "", "", "", "", ""}}, {"visible", true}};
     std::vector<Route> routes_;
@@ -85,9 +92,12 @@ private:
     int map_ = 0, hero_x_ = 0, hero_y_ = 0;
     bool quit_ = false;
     Input input_;
+    Input previous_input_;
     std::string error_, message_;
     std::string project_id_;
     std::string save_root_;
+    std::string asset_root_;
+    std::shared_ptr<Resources> resources_;
     std::map<std::string, Json> save_slots_;
     std::set<std::string> dirty_saves_;
     Context error_context_;
@@ -104,6 +114,12 @@ private:
     void execute(Run& run, const Json& command);
     void branch(Frame& frame, int indent, const std::vector<bool>& conditions);
     void picture(const Json& command, Context context);
+    void advance_pictures();
+    void erase_picture(int id, int duration);
+    void picture_effect(const Json& command, Context context);
+    void show_choice(Run& run, const Json& command);
+    void advance_choice();
+    void string_operation(const Json& command, Context context);
     void call(Run& run, const Json& command);
     std::string character_key(int target, Context context);
     void start_route(Run& run, const Json& command);
@@ -119,4 +135,5 @@ private:
 
 Json load_json(const std::string& filename);
 void atomic_save(const std::string& filename, const Json& state);
+std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame);
 }

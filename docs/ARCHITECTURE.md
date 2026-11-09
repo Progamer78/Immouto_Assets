@@ -14,8 +14,11 @@ Existing projects were inspected before this choice:
 | djytw/wolf-rpg-formats | 5c70e643693e08f99bf299a2ca598f7eaa02c542 | MIT format descriptions; used to implement complete binary framing for this title. Not a runtime. |
 | popupie/wolftools | fad1d573a3abb468f2d9a7510b0e77e9be023c45 | MIT archive/inspection/browser preparation tool. Not a native runtime. |
 | G1org1owo/wolfrpg-map-parser | 59dc4578c0b7cd925da47e33b02a5173aa4bb856 | MIT command framing and argument enums; independent reference for numeric operations, input, database and transition configuration. |
+| gdlbo/makerplay | c01d80a48200189fcf93f310cfffb12828c923f6 | Additional candidate reviewed during reassessment: Android integration with a Rust/SDL3 WOLF runtime. No reuse license was identified in the inspected repository root or crate manifest, and compatibility with this title/iOS was not tested. Its code has not been copied. |
 
-The C++ interpreter must execute original commands; it must never replace a scene with a hardcoded imitation. Unknown command IDs or unsupported argument layouts stop execution and record the original byte offset and event context.
+This choice remains provisional. An existing runtime proven against this game, with appropriate reuse terms, could reduce the work. None of the inspected alternatives has established that result. The current C++/SDL approach meets the platform requirements, but full-game compatibility and the development effort remain unproven. The next useful acceptance gate is a new-game sequence followed by saving, quitting and loading; a compiled IPA or title screen does not satisfy it.
+
+The C++ interpreter executes original commands. Unknown command IDs or unsupported argument layouts stop execution and record the original byte offset and event context. Frame-based input replays and local renderer captures make failures reproducible without repeatedly building an IPA. Focused probes run the supplied Windows executable only in an isolated copy to check behavior that format descriptions leave uncertain.
 
 ## Data path
 
@@ -37,7 +40,7 @@ Native development snapshots capture all currently implemented state, including 
 
 ## Platform and build
 
-SDL2 is pinned to commit 5d249570393f7a37e037abf22cd6012a4cc56a71 (2.32.10). The initial frontend supports original PNG/JPEG image pictures, sprite-sheet crops, scaling/blending, mouse/touch input and controller bindings. It has no replacement game content. Text/window pictures, map rendering, audio, animated effects and full iOS lifecycle validation remain required.
+SDL2 is pinned to commit 5d249570393f7a37e037abf22cd6012a4cc56a71 (2.32.10). The frontend renders original PNG/JPEG pictures and an initial subset of text controls using the supplied font and stb_truetype. It supports basic picture interpolation, delayed fade-out, anchors, negative color flicker, scaling, mouse/touch input and controller bindings. Miniaudio 0.11.23 and stb_vorbis provide native Ogg/MP3/WAV decoding, mixing, music streaming, pitch and fades through SDL's audio device. Filename-based playback is implemented; other sound command layouts remain unsupported. Window pictures, map rendering, complete text/audio semantics, richer effects and full iOS lifecycle validation remain required.
 
 Git history contains source and reports. Game assets are prepared separately for a private Release attachment. A manual iOS workflow downloads those assets when requested, copies them into the application bundle and builds an ARM64 device application. Signed export uses a certificate and profile stored in GitHub secrets. The default unsigned build validates compilation without signing credentials. Native CI has passed on GitHub across Windows, Linux and macOS; the first unsigned iOS check passed in 241 seconds. Its downloaded IPA contains a verified ARM64 executable and deliberately excludes game assets. Signed export and device gameplay remain unverified.
 
