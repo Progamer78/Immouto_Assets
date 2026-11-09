@@ -10,7 +10,7 @@
 - Command 290 group zoom supports the interaction menu's 100/105 percent effects. A Windows 150 percent fixture confirms both position and dimensions scale about the shared center; base picture queries stay unchanged.
 - Normal launches use the original title/Continue flow. Developer snapshots require explicit opt-in or capture mode. A rendered startup with an existing gameplay snapshot reaches the original title at frame 80.
 - Bottom controls use the iOS safe area and a taller strip. A new Menu button provides a confirmed Return to title action, including recovery from interpreter compatibility stops. Saved slots are retained.
-- These fixes pass local Debug/Release runtime and SDL tests. Updated touch behavior and same-app thin-update persistence still require confirmation on the phone.
+- These fixes pass local Debug/Release runtime and SDL tests. The final [build 7 IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-7-1) is 1,002,775 bytes, built in 43 seconds and passed local ZIP/digest/ARM64 inspection. All four [source CI jobs](https://github.com/Progamer78/Immouto_Assets/actions/runs/42714688537) pass for `390863c`. Updated touch behavior and same-app thin-update persistence still require confirmation on the phone.
 
 ## Confirmed source
 

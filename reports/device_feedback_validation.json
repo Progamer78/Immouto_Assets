@@ -47,5 +47,25 @@
     "New safe-area behavior and native Menu need iPhone confirmation",
     "Thin IPA update must preserve existing app Documents assets and saves",
     "Whole-game compatibility remains incomplete"
-  ]
+  ],
+  "normal-startup-with-saves": {
+    "frame": 80,
+    "error": "",
+    "capture_sha256": "b88b1ab72431b3b4cc745746fb36d2aba5627c08d90f49dfce0d21c491af1ab3",
+    "existing_settings_and_native_slot": true,
+    "slot_bytes_unchanged": true
+  },
+  "title-load-with-saves": {
+    "frame": 12650,
+    "error": "",
+    "capture_sha256": "c57eaec28cde389c30f23680208bb5427cb2a8834d6138c36a8af1b50d5d684e",
+    "existing_settings_and_native_slot": true,
+    "slot_bytes_unchanged": true
+  },
+  "source_ci": {
+    "url": "https://github.com/Progamer78/Immouto_Assets/actions/runs/42714688537",
+    "source": "390863ce5d27e1e770bd0f3d7b7e57ce95e25fc3",
+    "all_four_jobs": "success"
+  },
+  "ipa_release": "https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-7-1"
 }

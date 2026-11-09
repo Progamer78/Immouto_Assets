@@ -2,7 +2,15 @@
 
 This is an early native test build. Opening, home, save/load, Training and Reading pass locally. The user confirmed that the full IPA runs on an iPhone; the complete game is unfinished. Requires iOS 15 or later.
 
-## Download the IPA
+## Update the installed game
+
+Download **`Monochrome-unsigned.ipa`** from **[iOS build 7 - iPhone feedback fixes](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-7-1)**. This update is **1,002,775 bytes (about 1 MB)** and reuses the assets installed by full build 5. Its Actions build passed in 43 seconds; the downloaded archive passed ZIP, SHA-256 and ARM64 checks. The updated version still needs testing on the phone.
+
+Install it with Sideloadly **over the existing Monochrome app**, using the same Apple ID and bundle identifier as before. **Do not uninstall the current app**: its Documents directory contains the game assets and saved slots. After updating, use the original title's Continue/Load option to select your save. The new bottom Menu button offers Return to title; controls now fit within the iPhone safe area.
+
+This small IPA requires the existing asset cache. For a first installation or a device without that cache, install the full build below before applying build 7. Same-app data retention depends on the signing/install path and still needs confirmation with this update.
+
+## First installation: full game IPA
 
 Sign into the GitHub account with access to your private repository. Open **[iOS development build 5 — includes the game](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-5-1)** and download **`Monochrome-unsigned.ipa`** under Assets. It is **1,005,677,313 bytes (about 1 GB)**. The older approximately 1 MB files contain no game assets and cannot start the game on their own.
 

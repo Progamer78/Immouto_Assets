@@ -78,7 +78,7 @@ Headless tests that need existing slots set `WOLF_STORAGE_DIR` to the app storag
 
 ## Whole-game implementation work list
 
-Run `python tools/inventory_commands.py build/game/game.json` to regenerate [command_variants.json](../reports/command_variants.json). It groups all 262,338 records into 639 selected layouts across 52 command IDs, preserving sample original locations without copying dialogue or resource contents. Ten IDs currently have no dispatch handler. Existing handlers still contain unsupported variants, so these counts are not a completion percentage. The inventory guides batched command-family work; clean input replays, renderer captures and actual gameplay/save-load comparisons remain separate acceptance checks.
+Run `python tools/inventory_commands.py build/game/game.json` to regenerate [command_variants.json](../reports/command_variants.json). It groups all 262,338 records into 639 selected layouts across 52 command IDs, preserving sample original locations without copying dialogue or resource contents. Nine IDs currently have no dispatch handler. Existing handlers still contain unsupported variants, so these counts are not a completion percentage. The inventory guides batched command-family work; clean input replays, renderer captures and actual gameplay/save-load comparisons remain separate acceptance checks.
 
 ## Home activities
 
@@ -92,3 +92,5 @@ The original Windows and native short-window fixtures compare three 64×72 pixel
 The [girl interaction replay](../tests/replays/girl-interaction.json) resumes the verified loaded-home state at 12650, clicks the character and reaches the interaction menu at 13250. All 600 ticks have passed through the native SDL renderer. The missing `Debugskip` label is a warning and falls through, matching the supplied Windows executable. The [Communication replay](../tests/replays/girl-communication.json) continues from 13250 through 14150 in the interpreter and exercises the sign-extended BGS stop encoding. See [device-feedback validation](../reports/device_feedback_validation.json) for limits and capture hashes.
 
 Normal launch now ignores development snapshots unless `WOLF_DEV_RESUME=1` or capture mode opts in. Set `WOLF_DEV_RESUME=0` to test normal startup even during a capture. With an existing frame-12650 snapshot, frame 80 renders the original title. The Menu control adds an explicit Return to title action; the iOS safe-area geometry is tested with a 2796x1290 output and bottom/side insets, but actual phone touch behavior still needs confirmation.
+
+The final normal-startup test also includes existing saved settings and native slot 2. The title renders at frame 80; replaying Continue/Load reaches home at 12650. Original and copied slot bytes remain unchanged. Updated iOS source compiled successfully in Actions; build 7 passed archive/digest/ARM64 checks and all four source CI jobs. Phone behavior remains a separate check.
