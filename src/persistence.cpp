@@ -12,7 +12,9 @@
 #endif
 
 namespace wolf {
-void atomic_save(const std::string& filename, const Json& state) {
+void atomic_save(const std::string& filename, const Json& state) { atomic_write(filename, state.dump()); }
+
+void atomic_write(const std::string& filename, const std::string& bytes) {
     const auto path = std::filesystem::u8path(filename);
     if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path());
     auto temporary = path; temporary += ".tmp";
@@ -22,7 +24,6 @@ void atomic_save(const std::string& filename, const Json& state) {
     FILE* file = std::fopen(temporary.c_str(), "wb");
 #endif
     if (!file) throw std::runtime_error("Cannot create save temporary file");
-    const auto bytes = state.dump();
     bool ok = std::fwrite(bytes.data(), 1, bytes.size(), file) == bytes.size();
     ok = std::fflush(file) == 0 && ok;
 #ifdef _WIN32

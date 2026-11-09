@@ -30,7 +30,7 @@ build/windows-app/wolf-headless.exe build/game/game.json 1200 -1 tests/replays/o
 build/windows-core-release/wolf-headless.exe build/game/game.json 12200 -1 tests/replays/opening-extended.json build/prologue-state.json
 ```
 
-The 1,200-frame run is a passing interpreter check at a visible choice menu. The extended replay reaches frame 12,200 without a compatibility stop. Rendering its resumed next frame fails with `Unsupported picture blend mode`: text pictures retain raw blend word 15 instead of resolving its previous/default value. This is a renderer compatibility failure, not a passing gameplay test. State output is written only if execution has not halted. Release builds avoid the debug interpreter's substantial overhead; desktop replay speed does not establish iPhone performance.
+The 1,200-frame run is a passing interpreter check at a visible choice menu. The extended replay reaches frame 12,200 without a compatibility stop, and its next-frame native capture now renders the home screen. Retained show-picture blend/anchor/transform values are resolved before rendering. State output is written only if execution has not halted. Release builds avoid the debug interpreter's substantial overhead; desktop replay speed does not establish iPhone performance.
 
 To continue a successful saved development state without replaying the title, pass it as the final argument and retain the same absolute-frame input recording. Source/game compatibility is checked before restoring it.
 
@@ -64,8 +64,18 @@ A known mismatch remains for a relative range movement overlapping an already de
 
 The opening prompt and title menu have been captured in both implementations. For the Windows menu capture, only the copied title-prompt keyboard poll was replaced by a constant confirm result; the original title/common logic then ran normally. Native menu entry uses the recorded input above. Background variation depends on random state. Text metrics, exact frame ordering, flicker/fade timing and audio looping still need closer comparison.
 
-New Game performs the initial transfers and reaches opening dialogue/choices. Map rendering, movement/collision, full game save/load and iPhone gameplay are not verified. Development resumes are not finished game saves, and music playback position is not yet restored with them. Text-picture growth, the renderer texture-cache budget and first-install asset duplication still require device memory checks.
+New Game performs the initial transfers and reaches the home screen. The original Save menu writes a native slot and JPEG preview, and a fresh launch can load that slot back into the home screen. Map rendering, movement/collision, broader gameplay and iPhone gameplay are not verified. Text-picture growth, the renderer texture-cache budget and first-install asset duplication still require device memory checks.
+
+## Original Save and Load menus
+
+The [home-save replay](../tests/replays/home-save.json) extends the opening recording: it opens Save at frame 12,220 and selects slot 2 at 12,520. Run it in the SDL application with writable storage and capture frame 12,780. The current recorded save test resumes a successful development state at 12,501 rather than rendering the entire opening again. The result contains a populated slot 2, a native state file at `saves/save/savedata02.sav.json`, and a 1024×576 preview at `Save/save2.jpg`.
+
+To test Load independently, keep those files, preserve/move `resume.json` out of the storage directory, and use the [title-load replay](../tests/replays/title-load.json) from startup. It opens Continue with the pointer, hovers slot 2, then holds Confirm briefly. A plain mouse click did not confirm this menu in the current test; the on-screen Confirm control supplies the same basic input as the recording. This input issue remains to be resolved.
+
+The successful native load capture at frame 12,650 shows the home screen with Day 1, 18:30 and 3,108 money. Its absolute frame jumps because in-game Load restores the saved simulation clock while keeping it monotonic. This is a tested home/save/restart/load path, not a full gameplay or Windows-save-compatibility claim. [Validation metadata](../reports/opening_validation.json) records the captures and limits without embedding game assets.
+
+Headless tests that need existing slots set `WOLF_STORAGE_DIR` to the app storage's `saves` directory and `WOLF_RESOURCE_STORAGE_DIR` to the app storage directory. The latter resolves generated screenshots separately from native JSON slots. Screenshot commands require the SDL frontend and stop explicitly if left unhandled in a headless run.
 
 ## Whole-game implementation work list
 
-Run `python tools/inventory_commands.py build/game/game.json` to regenerate [command_variants.json](../reports/command_variants.json). It groups all 262,338 records into 639 selected layouts across 52 command IDs, preserving sample original locations without copying dialogue or resource contents. Thirteen IDs currently have no dispatch handler. Existing handlers still contain unsupported variants, so these counts are not a completion percentage. The inventory guides batched command-family work; clean input replays, renderer captures and actual gameplay/save-load comparisons remain separate acceptance checks.
+Run `python tools/inventory_commands.py build/game/game.json` to regenerate [command_variants.json](../reports/command_variants.json). It groups all 262,338 records into 639 selected layouts across 52 command IDs, preserving sample original locations without copying dialogue or resource contents. Eleven IDs currently have no dispatch handler. Existing handlers still contain unsupported variants, so these counts are not a completion percentage. The inventory guides batched command-family work; clean input replays, renderer captures and actual gameplay/save-load comparisons remain separate acceptance checks.

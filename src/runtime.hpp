@@ -52,7 +52,7 @@ struct Route {
 
 class Runtime {
 public:
-    explicit Runtime(Json project, std::string save_root = {}, std::string asset_root = {});
+    explicit Runtime(Json project, std::string save_root = {}, std::string asset_root = {}, std::string resource_root = {});
     void tick(const Input& input = {});
     void start_common(int id);
     std::int32_t number(int ref, Context context = {});
@@ -64,7 +64,7 @@ public:
     void restore(const Json& state);
     Json diagnostics() const;
 
-    const Json& project() const { return project_; }
+    const Json& project() const { return *project_; }
     const Json& pictures() const { return pictures_; }
     const Json& characters() const { return characters_; }
     const Json& choice() const { return choice_; }
@@ -75,14 +75,21 @@ public:
     const Json* current_map() const;
     bool quit_requested() const { return quit_; }
     Json take_audio();
+    Json take_file_operations();
+    bool file_operations_pending() const { return !file_operations_.empty(); }
     Json choice_pictures() const;
 
 private:
-    Json project_, databases_, pictures_ = Json::object(), audio_ = Json::array();
+    Runtime(std::shared_ptr<const Json> project, std::string save_root, std::string asset_root, std::string resource_root, std::string identity);
+    std::shared_ptr<const Json> project_;
+    Json databases_, pictures_ = Json::object(), audio_ = Json::array();
     Json transition_ = {{"id", -1}, {"frames", 0}, {"wait", false}};
     Json pending_picture_erases_ = Json::array();
     Json pending_picture_changes_ = Json::array();
     Json pending_audio_ = Json::array();
+    Json music_ = Json::object();
+    Json pending_game_load_ = Json::object();
+    Json file_operations_ = Json::array();
     Json choice_ = Json::object();
     Json message_state_ = Json::object();
     std::uint64_t choice_clear_after_ = 0;
@@ -109,6 +116,7 @@ private:
     std::string project_id_;
     std::string save_root_;
     std::string asset_root_;
+    std::string resource_root_;
     std::shared_ptr<Resources> resources_;
     std::shared_ptr<TextRasterizer> text_rasterizer_;
     std::map<std::string, Json> save_slots_;
@@ -152,6 +160,12 @@ private:
     bool route_pending(const Run& run) const;
     bool string_reference(int ref);
     void saved_variable(const Json& command, Context context);
+    std::string save_name(int identifier, Context context);
+    Json& save_slot(const std::string& name);
+    void game_save_load(Run& run, const Json& command);
+    void apply_game_load();
+    void remember_music(const Json& event);
+    void resume_music();
     void flush_saves();
     std::int32_t assign(std::int32_t current, std::int64_t value, int operation) const;
     void fail(const std::string& message) const;
@@ -159,6 +173,7 @@ private:
 
 Json load_json(const std::string& filename);
 void atomic_save(const std::string& filename, const Json& state);
+void atomic_write(const std::string& filename, const std::string& bytes);
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame);
 int picture_pattern(const Json& picture, std::uint64_t frame);
 std::pair<std::int64_t, std::int64_t> picture_draw_offset(const Json& picture, std::uint64_t frame);

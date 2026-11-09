@@ -41,7 +41,7 @@ void Runtime::picture_query(const Json& command, Context context) {
                 width = dimensions.first / div_x; height = dimensions.second / div_y;
             } else if (kind == 3 || kind == 4) { width = picture.at("div_x"); height = picture.at("div_y"); }
             else if (kind == 2) {
-                if (!text_rasterizer_) text_rasterizer_ = std::make_shared<TextRasterizer>(asset_root_, project_.at("game"),
+                if (!text_rasterizer_) text_rasterizer_ = std::make_shared<TextRasterizer>(asset_root_, project_->at("game"),
                     databases_.at("system").at("types").at(12).at("rows"));
                 const auto dimensions = text_rasterizer_->measure(picture.at("content"), picture.at("text_style"));
                 width = dimensions.first; height = dimensions.second;

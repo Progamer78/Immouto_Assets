@@ -2,7 +2,7 @@
   "format": "wolf-command-inventory",
   "version": 1,
   "project_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c",
-  "runtime_source_sha256": "45a064d22866c5941911b2eee1436f4a5cb905eb48eff77dd94891d6da1776b9",
+  "runtime_source_sha256": "dfb8066ccfdc9518c9dbbd11a3909522a496a62a72684e05391cde0429422b47",
   "limits": [
     "Static inventory; neither reachability nor full compatibility is established.",
     "A handler's presence does not mean its layouts, rendering or timing are supported.",
@@ -17,16 +17,6 @@
       "id": 106,
       "name": "DebugText",
       "records": 76
-    },
-    {
-      "id": 1000,
-      "name": "Screenshot",
-      "records": 32
-    },
-    {
-      "id": 220,
-      "name": "SaveLoad",
-      "records": 25
     },
     {
       "id": 174,
@@ -11710,7 +11700,7 @@
       "id": 220,
       "name": "SaveLoad",
       "records": 25,
-      "dispatch_handler_present": false,
+      "dispatch_handler_present": true,
       "variants": [
         {
           "numeric_arguments": 2,
@@ -13586,7 +13576,7 @@
       "id": 1000,
       "name": "Screenshot",
       "records": 32,
-      "dispatch_handler_present": false,
+      "dispatch_handler_present": true,
       "variants": [
         {
           "numeric_arguments": 1,

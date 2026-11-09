@@ -1,5 +1,5 @@
 {
-  "native_scenarios": 47,
+  "native_scenarios": 59,
   "python_tests_local": 14,
   "debug_and_release_core_passed": true,
   "windows_sdl_frontend_compiled": true,
@@ -42,25 +42,41 @@
         "message": {},
         "pictures": 13
       }
+    },
+    "home": {
+      "frame": 12201,
+      "bmp_sha256": "9fa58e8520380efc194e29c015dc7b68695580c3511c203ed577448ed770daa1",
+      "map": 1,
+      "error": "",
+      "pictures": 59
+    },
+    "save_menu": {
+      "frame": 12501,
+      "bmp_sha256": "a3ed647915f29027a5269153bf83d5881ebe36a12d7550110f0224c594d77056",
+      "map": 1,
+      "error": "",
+      "pictures": 81
+    },
+    "populated_save_slot": {
+      "frame": 12780,
+      "bmp_sha256": "643a32910c45aa81949a8bd984fffd817e8c65aab8ac450ac37ee0c6c2400da4",
+      "map": 1,
+      "error": "",
+      "pictures": 83
+    },
+    "loaded_home": {
+      "frame": 12650,
+      "bmp_sha256": "6130662b14048b4218cfcbd0d72191bceb7121dff3ad1ecf99eccf7f1a76e20b",
+      "map": 1,
+      "error": "",
+      "pictures": 60
     }
   },
   "capture_method": "SDL dummy video/audio, restored successful headless state from the same native core, rendered the next tick. No iPhone test.",
   "six_reference_text_widths_match": true,
   "full_game_playable": false,
   "device_tested": false,
-  "current_stop": {
-    "phase": "renderer",
-    "frame": 12201,
-    "error": "Unsupported picture blend mode",
-    "picture_ids": [
-      1605,
-      1606,
-      1607,
-      1608,
-      1609
-    ],
-    "raw_blend_value": 15
-  },
+  "current_stop": null,
   "captures_source_commit": "59133fc2a9ef8e299b17e3dc1d380ead39a22c39",
   "interpreter_replay": {
     "input": "tests/replays/opening-extended.json",
@@ -71,5 +87,66 @@
   },
   "shake_reference_samples_matched": 240,
   "whole_game_layout_groups": 639,
-  "whole_game_layout_inventory_is_compatibility_percentage": false
+  "whole_game_layout_inventory_is_compatibility_percentage": false,
+  "native_screenshot_test_passed": true,
+  "current_stop_scope": "No compatibility stop in the tested opening/home/save/load path; broader gameplay remains unverified.",
+  "game_save_load": {
+    "passed": true,
+    "slot": 2,
+    "saved_frame": 12571,
+    "saved_map": 1,
+    "native_slot_bytes": 573514,
+    "native_slot_sha256": "9f83d0a808cfd45934dea5011b1d1f39e955f709875725329114487a053712bd",
+    "preview_dimensions": [
+      1024,
+      576
+    ],
+    "preview_sha256": "b2d70252b3be24d29feffac0b7d3487aaf126bb11c86b7bbd77ee3eb50218f9d",
+    "save_replay": "tests/replays/home-save.json",
+    "load_replay": "tests/replays/title-load.json",
+    "save_test_started_from_successful_development_state": 12501,
+    "load_menu_started_from_clean_startup": true,
+    "loaded_capture_frame": 12650,
+    "observed_day": 1,
+    "observed_time": "18:30",
+    "observed_money": 3108,
+    "load_slot_input": "pointer hover plus held Confirm; plain mouse click did not confirm",
+    "original_windows_save_compatible": false,
+    "full_gameplay_loop_validated": false,
+    "device_tested": false
+  },
+  "new_capture_source_sha256": {
+    "src/asset_cache.cpp": "6135a7473ddc72a549201bc199d3af43c09c27b070406d49a028b534d9031934",
+    "src/asset_cache.hpp": "b22508e2eeaff96994dfe3f53127432fbc15a4e20a508cdcf75b7858ac34fa13",
+    "src/choices.cpp": "4d20d2e9ddf14d6a24bcdb6ff8fdb43e2ecb26b04f17db62c4695adb67b22d94",
+    "src/game_saves.cpp": "fde3528488583abb4bd34b68c8be963b1be17091b8b1262fd6cf534317f20311",
+    "src/headless.cpp": "1e3d37608480a92f417c2dea24fc905b1dd65a4b09dbc18263d51da57dc75c57",
+    "src/images.cpp": "b250c825baefbd5ba2ec6ad4d7996ba250018fcc64516d33d96a66f70669362d",
+    "src/images.hpp": "1d65f1e4bd45a904a20d47c77e8e4d5fae774b24414b1a3e6a4af7d8d13527e9",
+    "src/input_replay.cpp": "167dab7a873a6af03b4d114fe757d48ab89ae4bf75eb93b842c25dd4bbb6fb16",
+    "src/input_replay.hpp": "f7173ea15fb861827f80c1a20c14ef4a9058b6ef40a5dead3395de9060c1ecd6",
+    "src/messages.cpp": "6aa52bef0fd8361f5c9820f47d424e248d75c396a4e29bed6cd7d0f76342b436",
+    "src/movement.cpp": "82dc5de37957baa1ea68ef86e1de1e33c8f54e96b600cca986d456b435a445c7",
+    "src/persistence.cpp": "9c4b670f873acc50ea31119aaf6abea58353b947b93fb8c56e72163e65fde053",
+    "src/picture_queries.cpp": "d827f5cae5bd9850a0d8b39fc7503361c5f45f6988affca680adbdd972838f94",
+    "src/resources.cpp": "71101bdf30d82cb33644dbb5e23d6421de2005a12c73126f71b6f8d6484494a0",
+    "src/resources.hpp": "dbe44ec8f2e9f24ed62e93890972fea739fb730461a64cc1379d7c7f04039694",
+    "src/runtime.cpp": "dfb8066ccfdc9518c9dbbd11a3909522a496a62a72684e05391cde0429422b47",
+    "src/runtime.hpp": "3cecbf67f0aa5dc42d93ecdc94f21c20250948cc92af506b025b28af55cb7b98",
+    "src/saved_variables.cpp": "8e108e5b07c3b4e1266d2dfcfca11084e3b7c2aafa0b978f3a87c5fcc5e6e601",
+    "src/shapes.cpp": "f0f6bb0951cf9d3957c5b2dd3776e09ecb31d3212e7f98f9799962cc7da9b808",
+    "src/shapes.hpp": "64ff3116dc31ca9353f7e00ac5e93a28689290b6b5287033b7c502e403392155",
+    "src/strings.cpp": "0cfc8ba26ecd5a45b54969098321c820817e99bec6485f5f5ef6a10e5d86874b",
+    "src/text.cpp": "d291c0b6050aac6610685e479a6d16832f99f75f37897b8be42db638e37a7ea3",
+    "src/text.hpp": "efbe8cb402e95de7207d2401437991468ca10284e52956b0565c4987d2da1e2a",
+    "frontend/audio.cpp": "e3ae63de354b7337006076129f2222e1524660172fe6f62f6a5e74f8b98b6b25",
+    "frontend/audio.hpp": "fd0f67e4d64b0617475f070ddcd93729dacf14bd9eaf6470ce1ec048bae3b22d",
+    "frontend/audio_backend.c": "16d31684964ed98c129fc098f6dcf129c246b996eb3e1dd4f677eb30197a80f9",
+    "frontend/crash_log.cpp": "b72adbc15608b88c9aef3357591e4f344e1492dde7d354087f9d88915c50bbf7",
+    "frontend/crash_log.hpp": "aba58b2ecec78d675971005998b8d0a4229aabe61ec81ad24d821b518e2e74a2",
+    "frontend/file_operations.cpp": "171909ac497527b1a8943da75e2e888cdcfe89bb22642ef8e35ef8968a5a9798",
+    "frontend/file_operations.hpp": "81a16c220f2946a5c85943f450f04fb3f520baffcb3f2654801e662bd4c40e56",
+    "frontend/ios_paths.mm": "2826c6616b56af5dd9f2990c3b36268c3197e5268da38aec528128443ab7e656",
+    "frontend/main.cpp": "09704130e386be4ad88c8d9064ecd8ae00ae6da216e1c60edeff92fee394f3a3"
+  }
 }

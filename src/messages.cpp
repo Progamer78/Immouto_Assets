@@ -49,7 +49,7 @@ void Runtime::show_message(Run& run, const Json& command) {
             {"ready", frame_ + std::max(0, number(9000010))}, {"complete", false}, {"done", false},
             {"x", number(9000001)}, {"y", number(9000002)},
             {"style", {{"size", size}, {"shadow", number(9000021)}, {"speed", 0},
-                {"antialias", project_.at("game").value("flags", Json::array()).size() > 14 ? project_.at("game").at("flags").at(14).get<int>() : 0}}}};
+                {"antialias", project_->at("game").value("flags", Json::array()).size() > 14 ? project_->at("game").at("flags").at(14).get<int>() : 0}}}};
     }
     if (message_state_.at("owner") == run.owner && message_state_.at("common") == frame.context.common &&
         message_state_.at("pc") == frame.pc - 1 && message_state_.at("done") == true) {
@@ -65,7 +65,7 @@ void Runtime::advance_message() {
     const int total = message_state_.at("total"), speed = number(9000009);
     double progress = message_state_.at("progress");
     if (message_state_.at("instant") == true || speed <= 0 || confirm) progress = total;
-    else progress += static_cast<double>(speed) / project_.at("game").at("fps").get<int>();
+    else progress += static_cast<double>(speed) / project_->at("game").at("fps").get<int>();
     progress = std::min(progress, static_cast<double>(total));
     message_state_["progress"] = progress; message_state_["visible"] = static_cast<int>(std::floor(progress));
     message_state_["complete"] = progress >= total;

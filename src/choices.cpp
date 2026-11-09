@@ -5,13 +5,13 @@
 namespace wolf {
 void Runtime::prepare_choice_layout() {
     if (asset_root_.empty()) return; // Core-only synthetic fixtures need no fonts.
-    if (!text_rasterizer_) text_rasterizer_ = std::make_shared<TextRasterizer>(asset_root_, project_.at("game"),
+    if (!text_rasterizer_) text_rasterizer_ = std::make_shared<TextRasterizer>(asset_root_, project_->at("game"),
         databases_.at("system").at("types").at(12).at("rows"));
     const Json style = {{"size", number(9000008)}, {"shadow", number(9000021)}, {"speed", 0},
-        {"antialias", project_.at("game").at("flags").at(14)}};
+        {"antialias", project_->at("game").at("flags").at(14)}};
     const int border = 6 + std::max(0, number(9000021));
     const int pad_x = std::max(0, number(9000026)), pad_y = std::max(0, number(9000027));
-    const int gap = project_.at("game").at("flags").at(11);
+    const int gap = project_->at("game").at("flags").at(11);
     int width = 0, height = 0;
     Json rows = Json::array();
     for (const auto& text : choice_.at("strings")) {
@@ -21,8 +21,8 @@ void Runtime::prepare_choice_layout() {
         rows.push_back({{"top", height}, {"height", row_height + gap}, {"content_height", row_height}}); height += row_height + gap;
     }
     width += pad_x * 2; height += pad_y * 2 - gap;
-    const int center = choice_.at("x").get<int>() == -1 ? project_.at("game").at("width").get<int>() / 2 : choice_.at("x").get<int>();
-    const int top = choice_.at("y").get<int>() == -1 ? (project_.at("game").at("height").get<int>() - height) / 2 : choice_.at("y").get<int>();
+    const int center = choice_.at("x").get<int>() == -1 ? project_->at("game").at("width").get<int>() / 2 : choice_.at("x").get<int>();
+    const int top = choice_.at("y").get<int>() == -1 ? (project_->at("game").at("height").get<int>() - height) / 2 : choice_.at("y").get<int>();
     choice_["layout"] = {{"x", center - width / 2}, {"y", top}, {"width", width}, {"height", height},
         {"pad_x", pad_x}, {"pad_y", pad_y}, {"border", border}, {"rows", rows}, {"style", style},
         {"show_window", number(9000014) != 0}, {"cursor_blend", number(9000022)},

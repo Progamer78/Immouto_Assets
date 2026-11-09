@@ -2,6 +2,7 @@
 #include <SDL.h>
 #include <miniaudio/miniaudio.h>
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <regex>
 
@@ -97,7 +98,7 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
         ma_sound_set_pitch(&voice->sound, event.at("tempo").get<float>() / 100.f);
         if (kind != 2) {
             ma_uint32 sample_rate = 0;
-            if (ma_sound_get_data_format(&voice->sound, nullptr, nullptr, &sample_rate, nullptr, 0) != MA_SUCCESS)
+            if (ma_sound_get_data_format(&voice->sound, nullptr, nullptr, &sample_rate, nullptr, 0) != MA_SUCCESS || sample_rate == 0)
                 throw std::runtime_error("Cannot read music sample rate");
             const int loop_ms = event.at("loop_ms");
             if (loop_ms < 0) throw std::runtime_error("Unsupported negative audio loop position");
@@ -111,8 +112,21 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
                     if (std::regex_search(header, match, std::regex("LOOPLENGTH=([0-9]+)"))) loop_end = loop_start + std::stoull(match[1]);
                 }
             }
+            ma_uint64 position = event.at("start_ms").get<ma_uint64>() * sample_rate / 1000;
+            if (event.contains("resume_position_ms")) {
+                const double milliseconds = event.at("resume_position_ms");
+                if (!std::isfinite(milliseconds) || milliseconds < 0 || milliseconds > static_cast<double>(MA_UINT64_MAX / sample_rate) * 1000)
+                    throw std::runtime_error("Invalid saved music position");
+                position = static_cast<ma_uint64>(milliseconds * sample_rate / 1000);
+                ma_uint64 length = 0;
+                if (ma_sound_get_length_in_pcm_frames(&voice->sound, &length) != MA_SUCCESS || length == 0)
+                    throw std::runtime_error("Cannot determine saved music loop length");
+                const auto end = std::min(loop_end, length);
+                if (loop_start >= end) throw std::runtime_error("Invalid saved music loop interval");
+                if (position >= end) position = loop_start + (position - loop_start) % (end - loop_start);
+            }
             if (ma_data_source_set_loop_point_in_pcm_frames(ma_sound_get_data_source(&voice->sound), loop_start, loop_end) != MA_SUCCESS ||
-                ma_sound_seek_to_pcm_frame(&voice->sound, event.at("start_ms").get<ma_uint64>() * sample_rate / 1000) != MA_SUCCESS)
+                ma_sound_seek_to_pcm_frame(&voice->sound, position) != MA_SUCCESS)
                 throw std::runtime_error("Cannot set music start/loop position");
             ma_sound_set_looping(&voice->sound, MA_TRUE);
             if (fade_ms) ma_sound_set_fade_in_milliseconds(&voice->sound, 0, 1, fade_ms);

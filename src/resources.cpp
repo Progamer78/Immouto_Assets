@@ -11,17 +11,29 @@ std::string folded(std::string value) {
     return value;
 }
 }
-Resources::Resources(std::string root) : root_(std::filesystem::u8path(root)) {}
+Resources::Resources(std::string root, std::string writable_root) : root_(std::filesystem::u8path(root)), writable_root_(std::filesystem::u8path(writable_root)) {}
 
 std::filesystem::path Resources::path(std::string relative) {
     if (root_.empty()) throw std::runtime_error("Game resource directory is not configured");
     std::replace(relative.begin(), relative.end(), '\\', '/');
+    while (relative.compare(0, 2, "./") == 0) relative.erase(0, 2);
+    if (!writable_root_.empty()) {
+        const auto lower = folded(relative);
+        Resources writable(writable_root_.u8string());
+        if (lower.compare(0, 13, "data/../save/") == 0) return writable.path(relative.substr(8));
+        if (lower.compare(0, 5, "save/") == 0) return writable.path(relative);
+        if (lower.compare(0, 5, "data/") == 0) {
+            const auto overlay = writable.path(relative);
+            if (std::filesystem::is_regular_file(overlay)) return overlay;
+        }
+    }
     const auto name = std::filesystem::u8path(relative);
     if (name.is_absolute() || relative.find(':') != std::string::npos)
         throw std::runtime_error("Absolute game resource path is not allowed");
     auto result = root_;
     for (const auto& part : name) {
-        if (part == ".." || part == ".") throw std::runtime_error("Game resource path escapes its directory");
+        if (part == "..") throw std::runtime_error("Game resource path escapes its directory");
+        if (part == ".") continue;
         if (part.empty()) continue;
         const auto exact = result / part;
         if (std::filesystem::is_symlink(exact)) throw std::runtime_error("Symlink game resources are not supported");

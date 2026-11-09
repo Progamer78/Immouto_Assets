@@ -4,6 +4,9 @@
 #include "input_replay.hpp"
 #include "audio.hpp"
 #include "text.hpp"
+#include "shapes.hpp"
+#include "file_operations.hpp"
+#include "images.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -55,6 +58,7 @@ struct Texture {
     int width = 0, height = 0;
     int logical_width = 0, logical_height = 0, border = 0;
     std::string revision;
+    std::vector<unsigned char> pixels;
     ~Texture() { if (value) SDL_DestroyTexture(value); }
 };
 struct Assets {
@@ -62,7 +66,7 @@ struct Assets {
     SDL_Renderer* renderer;
     std::map<std::string, std::unique_ptr<Texture>> textures;
     TextRasterizer text;
-    explicit Assets(fs::path path, SDL_Renderer* output, const Json& project) : resources(path.u8string()), renderer(output),
+    explicit Assets(fs::path path, SDL_Renderer* output, const Json& project, const fs::path& writable) : resources(path.u8string(), writable.u8string()), renderer(output),
         text(path, project.at("game"), project.at("databases").at("system").at("types").at(12).at("rows")) {}
     Texture& text_picture(const Json& picture, const std::string& cache_name = {}) {
         const auto key = std::string("text:") + picture.at("text_style").dump() + picture.at("content").get<std::string>();
@@ -75,6 +79,7 @@ struct Assets {
             texture->width = pixels.width; texture->height = pixels.height; SDL_FreeSurface(surface);
             texture->logical_width = pixels.logical_width; texture->logical_height = pixels.logical_height; texture->border = pixels.border;
             texture->revision = key;
+            texture->pixels = std::move(pixels.rgba);
             if (!texture->value) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
@@ -92,6 +97,7 @@ struct Assets {
             auto texture = std::make_unique<Texture>();
             texture->value = SDL_CreateTextureFromSurface(renderer, surface);
             texture->width = width; texture->height = height;
+            texture->pixels.assign(pixels, pixels + static_cast<std::size_t>(width) * height * 4); texture->revision = filename;
             SDL_FreeSurface(surface); stbi_image_free(pixels);
             if (!texture->value) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
@@ -104,7 +110,37 @@ struct Assets {
             auto texture = std::make_unique<Texture>(); texture->width = texture->height = 1;
             texture->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, 1, 1);
             const unsigned char white[] = {255, 255, 255, 255};
+            texture->pixels.assign(white, white + 4); texture->revision = ":square";
             if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, white, 4) != 0) throw std::runtime_error(SDL_GetError());
+            slot = std::move(texture);
+        }
+        return *slot;
+    }
+    Texture& shape(const Json& picture) {
+        const int width = picture.at("div_x"), height = picture.at("div_y");
+        const std::string content = picture.at("content");
+        const auto revision = content + ":" + std::to_string(width) + ":" + std::to_string(height);
+        auto& slot = textures[":shape:" + std::to_string(picture.at("id").get<int>())];
+        if (!slot || slot->revision != revision) {
+            const auto pixels = wolf::shape_pixels(content, width, height);
+            auto texture = std::make_unique<Texture>(); texture->width = width; texture->height = height; texture->revision = revision;
+            texture->pixels = pixels;
+            texture->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, width, height);
+            if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, pixels.data(), width * 4) != 0) throw std::runtime_error(SDL_GetError());
+            slot = std::move(texture);
+        }
+        return *slot;
+    }
+    Texture& brightened(const Texture& base, int id, const std::array<double, 3>& color) {
+        const auto revision = base.revision + Json(color).dump();
+        auto& slot = textures[":tint:" + std::to_string(id)];
+        if (!slot || slot->revision != revision) {
+            const auto pixels = wolf::adjust_image_color(base.pixels, color);
+            auto texture = std::make_unique<Texture>(); texture->width = base.width; texture->height = base.height;
+            texture->logical_width = base.logical_width; texture->logical_height = base.logical_height; texture->border = base.border;
+            texture->revision = revision;
+            texture->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, base.width, base.height);
+            if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, pixels.data(), base.width * 4) != 0) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
         return *slot;
@@ -125,10 +161,15 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         if ((p.at("blend") != 3 && p.at("opacity").get<int>() <= 0) || p.at("zoom") == 0 || p.at("zoom_y") == 0) continue;
         const bool window = kind >= 3;
         const std::string content = p.at("content");
-        const bool square = window && (content == "<SQUARE>" || content == "<SQUARE>FRAME");
-        auto& texture = square ? assets.square() : kind == 2 ? assets.text_picture(p, "$picture:" + std::to_string(p.at("id").get<int>())) : assets.image(content);
+        const bool line = window && content == "<LINE>";
+        const bool builtin = window && wolf::builtin_shape(content);
+        const auto tint = wolf::picture_tint(p, frame);
+        const bool brighten = std::any_of(tint.begin(), tint.end(), [](double channel) { return channel > 100; });
+        auto* selected = &(line ? assets.square() : builtin ? assets.shape(p) : kind == 2 ? assets.text_picture(p, "$picture:" + std::to_string(p.at("id").get<int>())) : assets.image(content));
+        if (brighten) selected = &assets.brightened(*selected, p.at("id"), tint);
+        auto& texture = *selected;
         const int dx = p.at("div_x"), dy = p.at("div_y"), pattern = wolf::picture_pattern(p, frame);
-        if (dx < 1 || dy < 1 || (!window && (pattern < 1 || pattern > dx * dy)))
+        if ((!line && (dx < 1 || dy < 1)) || (kind < 2 && (pattern < 1 || pattern > dx * dy)))
             throw std::runtime_error("Invalid picture sprite-sheet pattern");
         const int width = window ? dx : kind == 2 ? texture.logical_width : texture.width / dx;
         const int height = window ? dy : kind == 2 ? texture.logical_height : texture.height / dy;
@@ -157,18 +198,18 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         if (SDL_SetTextureBlendMode(texture.value, blend == 1 ? SDL_BLENDMODE_ADD : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND) != 0)
             throw std::runtime_error(SDL_GetError());
         SDL_SetTextureAlphaMod(texture.value, static_cast<Uint8>(blend == 3 ? 255 : std::clamp(p.at("opacity").get<int>(), 0, 255)));
-        const auto tint = wolf::picture_tint(p, frame);
-        for (double component : tint) if (component > 100) throw std::runtime_error("Picture color brightening is not implemented");
-        SDL_SetTextureColorMod(texture.value, static_cast<Uint8>(tint[0] * 255 / 100),
-            static_cast<Uint8>(tint[1] * 255 / 100), static_cast<Uint8>(tint[2] * 255 / 100));
-        if (square && content == "<SQUARE>FRAME") {
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer, static_cast<Uint8>(tint[0] * 255 / 100), static_cast<Uint8>(tint[1] * 255 / 100),
-                static_cast<Uint8>(tint[2] * 255 / 100), static_cast<Uint8>(std::clamp(p.at("opacity").get<int>(), 0, 255)));
-            if (SDL_RenderDrawRectF(renderer, &destination) != 0) throw std::runtime_error(SDL_GetError());
+        const auto drawing_tint = brighten ? std::array<double, 3>{100, 100, 100} : tint;
+        SDL_SetTextureColorMod(texture.value, static_cast<Uint8>(drawing_tint[0] * 255 / 100),
+            static_cast<Uint8>(drawing_tint[1] * 255 / 100), static_cast<Uint8>(drawing_tint[2] * 255 / 100));
+        if (line) {
+            SDL_SetRenderDrawBlendMode(renderer, blend == 1 ? SDL_BLENDMODE_ADD : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, static_cast<Uint8>(std::clamp(tint[0] * 255 / 100, 0.0, 255.0)), static_cast<Uint8>(std::clamp(tint[1] * 255 / 100, 0.0, 255.0)),
+                static_cast<Uint8>(std::clamp(tint[2] * 255 / 100, 0.0, 255.0)), static_cast<Uint8>(blend == 3 ? 255 : std::clamp(p.at("opacity").get<int>(), 0, 255)));
+            if (SDL_RenderDrawLineF(renderer, destination.x, destination.y, destination.x + destination.w, destination.y + destination.h) != 0)
+                throw std::runtime_error(SDL_GetError());
             continue;
         }
-        if (window && !square) {
+        if (window && !builtin) {
             if (texture.width % 3 || texture.height % 3) throw std::runtime_error("Window skin must divide into 3 by 3 cells");
             const int cell_w = texture.width / 3, cell_h = texture.height / 3;
             const float edge_w = cell_w * zoom, edge_h = cell_h * zoom_y;
@@ -267,7 +308,7 @@ int main(int argc, char** argv) {
             SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255); SDL_RenderFillRect(renderer, &bar); SDL_RenderPresent(renderer);
         });
 #endif
-        active_runtime = std::make_unique<wolf::Runtime>(wolf::load_json((game / "game.json").u8string()), (storage / "saves").u8string(), game.u8string());
+        active_runtime = std::make_unique<wolf::Runtime>(wolf::load_json((game / "game.json").u8string()), (storage / "saves").u8string(), game.u8string(), storage.u8string());
         auto& runtime = *active_runtime;
         const int width = runtime.project().at("game").at("width"), height = runtime.project().at("game").at("height");
         const int fps = runtime.project().at("game").at("fps");
@@ -288,7 +329,12 @@ int main(int argc, char** argv) {
         if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
         if (!renderer) throw std::runtime_error(SDL_GetError());
         SDL_RenderSetLogicalSize(renderer, width, height + 64);
-        Assets assets(game, renderer, runtime.project());
+        Assets assets(game, renderer, runtime.project(), storage);
+        wolf::Resources writable(storage.u8string());
+        auto game_target = std::make_unique<Texture>();
+        game_target->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height + 64);
+        if (!game_target->value) throw std::runtime_error(SDL_GetError());
+        SDL_SetTextureBlendMode(game_target->value, SDL_BLENDMODE_NONE);
         Audio audio(game);
         for (int i = 0; i < SDL_NumJoysticks(); ++i) if (SDL_IsGameController(i)) { controller = SDL_GameControllerOpen(i); break; }
         const auto save_path = storage / "resume.json";
@@ -360,14 +406,22 @@ int main(int argc, char** argv) {
                 audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
                 accumulator -= 1.0 / fps;
                 input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
+                if (runtime.file_operations_pending()) break;
             }
             if (steps >= 8) accumulator = 0;
             audio.pause(paused);
+            if (SDL_SetRenderTarget(renderer, game_target->value) != 0) throw std::runtime_error(SDL_GetError());
+            SDL_RenderSetLogicalSize(renderer, width, height + 64);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
             draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), std::numeric_limits<int>::min(), 100000);
             draw_message(renderer, assets, runtime.message_state(), height);
             draw_pictures(renderer, assets, runtime.choice_pictures(), runtime.frame());
             draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), 100000);
+            const auto file_operations = runtime.take_file_operations();
+            if (!file_operations.empty()) {
+                process_file_operations(renderer, writable, file_operations, width, height);
+                assets.textures.clear(); assets.resources.invalidate();
+            }
             for (int i = 0; i < 7; ++i) {
                 SDL_Rect rect{i * width / 7 + 3, height + 3, width / 7 - 6, 58};
                 SDL_SetRenderDrawColor(renderer, 56, 56, 56, 255); SDL_RenderFillRect(renderer, &rect);
@@ -385,6 +439,10 @@ int main(int argc, char** argv) {
                     SDL_RenderDrawLine(renderer, cx - 9, cy - 9, cx + 9, cy + 9); SDL_RenderDrawLine(renderer, cx - 9, cy + 9, cx + 9, cy - 9);
                 } else { SDL_Rect box{cx - 10, cy - 10, 20, 20}; SDL_RenderDrawRect(renderer, &box); }
             }
+            if (SDL_SetRenderTarget(renderer, nullptr) != 0) throw std::runtime_error(SDL_GetError());
+            SDL_RenderSetLogicalSize(renderer, width, height + 64);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
+            if (SDL_RenderCopy(renderer, game_target->value, nullptr, nullptr) != 0) throw std::runtime_error(SDL_GetError());
             const bool captured = !capture_path.empty() && (runtime.frame() >= static_cast<std::uint64_t>(capture_target) || !runtime.error().empty());
             if (captured) capture_frame(renderer, capture_path.c_str(), runtime);
             SDL_RenderPresent(renderer);

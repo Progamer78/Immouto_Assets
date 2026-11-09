@@ -27,35 +27,41 @@ Json load_json(const std::string& filename) {
     return Json::parse(stream);
 }
 
-Runtime::Runtime(Json project, std::string save_root, std::string asset_root) : project_(std::move(project)),
-    save_root_(std::move(save_root)), asset_root_(std::move(asset_root)), resources_(std::make_shared<Resources>(asset_root_)) {
-    if (project_.at("format") != "wolf-ios-ir" || project_.at("version") != 1)
+Runtime::Runtime(Json project, std::string save_root, std::string asset_root, std::string resource_root) :
+    Runtime(std::make_shared<const Json>(std::move(project)), std::move(save_root), std::move(asset_root), std::move(resource_root), {}) {}
+
+Runtime::Runtime(std::shared_ptr<const Json> project, std::string save_root, std::string asset_root, std::string resource_root, std::string source_identity) : project_(std::move(project)),
+    save_root_(std::move(save_root)), asset_root_(std::move(asset_root)), resource_root_(resource_root.empty() ? save_root_ : std::move(resource_root)),
+    resources_(std::make_shared<Resources>(asset_root_, resource_root_)) {
+    if (project_->at("format") != "wolf-ios-ir" || project_->at("version") != 1)
         fail("Unsupported intermediate data version");
-    std::uint64_t fingerprint = 14695981039346656037ULL;
-    for (unsigned char byte : project_.dump()) { fingerprint ^= byte; fingerprint *= 1099511628211ULL; }
-    std::ostringstream identity; identity << std::hex << fingerprint; project_id_ = identity.str();
-    databases_ = project_.at("databases");
+    if (source_identity.empty()) {
+        std::uint64_t fingerprint = 14695981039346656037ULL;
+        for (unsigned char byte : project_->dump()) { fingerprint ^= byte; fingerprint *= 1099511628211ULL; }
+        std::ostringstream identity; identity << std::hex << fingerprint; project_id_ = identity.str();
+    } else project_id_ = std::move(source_identity);
+    databases_ = project_->at("databases");
     const auto& start = databases_.at("system").at("types").at(7).at("rows").at(0);
     map_ = start.at(0); hero_x_ = start.at(1).get<int>() * 2; hero_y_ = start.at(2).get<int>() * 2;
     if (!current_map()) fail("Initial map is absent from the converted data");
     // Engine-owned values documented in WOLF's system-variable list.
     numbers_[9000115] = 319; // This compatibility target is the supplied 3.191 runtime.
-    numbers_[9000116] = project_.at("game").at("width");
-    numbers_[9000117] = project_.at("game").at("height");
-    numbers_[9000118] = project_.at("game").value("tile_size", 16);
-    numbers_[9000084] = project_.at("game").at("width") == 320 && project_.at("game").at("height") == 240 ? 0 :
-        project_.at("game").at("width") == 640 && project_.at("game").at("height") == 480 ? 1 :
-        project_.at("game").at("width") == 800 && project_.at("game").at("height") == 600 ? 2 : -1;
+    numbers_[9000116] = project_->at("game").at("width");
+    numbers_[9000117] = project_->at("game").at("height");
+    numbers_[9000118] = project_->at("game").value("tile_size", 16);
+    numbers_[9000084] = project_->at("game").at("width") == 320 && project_->at("game").at("height") == 240 ? 0 :
+        project_->at("game").at("width") == 640 && project_->at("game").at("height") == 480 ? 1 :
+        project_->at("game").at("width") == 800 && project_->at("game").at("height") == 600 ? 2 : -1;
     for (int ref = 9000100; ref <= 9000102; ++ref) numbers_[ref] = 100;
     numbers_[9000020] = -1;
     numbers_[9000014] = 1; numbers_[9000015] = 16; numbers_[9000016] = 5;
-    numbers_[9000026] = numbers_[9000027] = project_.at("game").contains("flags") ? project_.at("game").at("flags").at(12).get<int>() : 14;
+    numbers_[9000026] = numbers_[9000027] = project_->at("game").contains("flags") ? project_->at("game").at("flags").at(12).get<int>() : 14;
 }
 
 void Runtime::fail(const std::string& message) const { throw std::runtime_error(message); }
 
 const Json& Runtime::common(int id) const {
-    const auto& events = project_.at("common").at("events");
+    const auto& events = project_->at("common").at("events");
     if (id >= 0 && static_cast<std::size_t>(id) < events.size() && events.at(id).at("id") == id) return events.at(id);
     for (const auto& event : events) if (event.at("id") == id) return event;
     fail("Missing common event " + std::to_string(id));
@@ -70,7 +76,7 @@ const Json* Runtime::map_data(int id) const {
     const auto& rows = databases_.at("system").at("types").at(0).at("rows");
     if (id < 0 || static_cast<std::size_t>(id) >= rows.size()) return nullptr;
     const std::string path = rows.at(id).at(0);
-    for (const auto& candidate : project_.at("maps")) if (candidate.at("file") == path) return &candidate;
+    for (const auto& candidate : project_->at("maps")) if (candidate.at("file") == path) return &candidate;
     return nullptr;
 }
 
@@ -78,11 +84,11 @@ const Json& Runtime::commands(Context c) const {
     if (c.common >= 0) return common(c.common).at("commands");
     const auto& rows = databases_.at("system").at("types").at(0).at("rows");
     const std::string file = rows.at(c.map).at(0);
-    for (const auto& m : project_.at("maps")) if (m.at("file") == file)
+    for (const auto& m : project_->at("maps")) if (m.at("file") == file)
         for (const auto& e : m.at("events")) if (e.at("id") == c.event)
             return e.at("pages").at(c.page).at("commands");
     fail("Missing command list");
-    return project_;
+    return *project_;
 }
 
 std::uint64_t Runtime::key(int ref, Context c) const {
@@ -124,15 +130,15 @@ std::int32_t Runtime::number(int ref, Context c) {
         return std::uniform_int_distribution<int>(0, ref - 8000000)(random_);
     if (ref == 9000071) return input_.mouse_x;
     if (ref == 9000072) return input_.mouse_y;
-    if (ref == 9000029) return static_cast<std::int32_t>(play_time_ticks_ / project_.at("game").at("fps").get<int>());
-    if (ref == 9000030) return static_cast<std::int32_t>((play_time_ticks_ % project_.at("game").at("fps").get<int>()) * 1000 / project_.at("game").at("fps").get<int>());
+    if (ref == 9000029) return static_cast<std::int32_t>(play_time_ticks_ / project_->at("game").at("fps").get<int>());
+    if (ref == 9000030) return static_cast<std::int32_t>((play_time_ticks_ % project_->at("game").at("fps").get<int>()) * 1000 / project_->at("game").at("fps").get<int>());
     if (ref == 9000013) return std::any_of(runs_.begin(), runs_.end(), [](const Run& run) { return run.blocking && !run.stack.empty(); });
     const auto position = numbers_.find(key(ref, c));
     return position == numbers_.end() ? 0 : position->second;
 }
 
 void Runtime::set_number(int ref, std::int32_t value, Context c) {
-    if (ref == 9000029) { play_time_ticks_ = static_cast<std::uint64_t>(std::max(0, value)) * project_.at("game").at("fps").get<int>(); return; }
+    if (ref == 9000029) { play_time_ticks_ = static_cast<std::uint64_t>(std::max(0, value)) * project_->at("game").at("fps").get<int>(); return; }
     if (ref >= 1000000000) {
         auto& field = cell(ref);
         if (!field.is_number_integer()) fail("Numeric write to a string database field");
@@ -247,7 +253,7 @@ void Runtime::schedule() {
         return std::any_of(runs_.begin(), runs_.end(), [&](const Run& run) { return run.owner == owner; });
     };
     // Order is explicit and deterministic. Exact WOLF scheduling still needs reference testing.
-    for (const auto& event : project_.at("common").at("events")) {
+    for (const auto& event : project_->at("common").at("events")) {
         const int id = event.at("id"), mode = event.at("mode");
         if (mode == 0) continue;
         Context c{id, -1, -1, map_};
@@ -308,6 +314,7 @@ void Runtime::tick(const Input& input) {
     pending_auto_input_ = 0;
     apply_input_permissions();
     try {
+        if (!file_operations_.empty()) fail("Pending game file operation requires the native renderer");
         for (auto it = pending_audio_.begin(); it != pending_audio_.end();) {
             if (it->at("start").get<std::uint64_t>() <= frame_) { audio_.push_back(it->at("event")); it = pending_audio_.erase(it); }
             else ++it;
@@ -331,7 +338,9 @@ void Runtime::tick(const Input& input) {
         std::stable_sort(runs_.begin(), runs_.end(), [&](const Run& a, const Run& b) { return priority(a) < priority(b); });
         for (auto& run : runs_) if (run.wake <= frame_ && !route_pending(run)) {
             run.waiting_route = 0; run.waiting_all_routes = false; advance(run);
+            if (!pending_game_load_.empty()) break;
         }
+        if (!pending_game_load_.empty()) { apply_game_load(); return; }
         runs_.erase(std::remove_if(runs_.begin(), runs_.end(), [&](const Run& r) {
             return r.stack.empty() || (!r.blocking && r.stack.front().context.common < 0 && r.stack.front().context.map != map_);
         }), runs_.end());
@@ -378,6 +387,7 @@ void Runtime::advance(Run& run) {
         error_context_ = f.context; error_command_ = cmd;
         ++executed_[cmd.at("code").get<int>()];
         execute(run, cmd);
+        if (!pending_game_load_.empty()) return;
         if (run.wake > frame_ || route_pending(run)) return;
     }
     if (!run.stack.empty()) fail("Event exceeded 20,000 commands without yielding; execution stopped");
@@ -390,7 +400,7 @@ void Runtime::call(Run& run, const Json& cmd) {
     int id = -1;
     if (code == 300) {
         const auto name = expand(cmd.at("strings").at(0), caller);
-        for (const auto& e : project_.at("common").at("events")) if (e.at("name") == name) { id = e.at("id"); break; }
+        for (const auto& e : project_->at("common").at("events")) if (e.at("name") == name) { id = e.at("id"); break; }
     } else {
         int target = number(arg(cmd, 0), caller);
         if (target >= 600000) {
@@ -398,7 +408,7 @@ void Runtime::call(Run& run, const Json& cmd) {
             // The original engine encodes relative IDs around 600100, not a
             // variable address. 600094 from common 270 therefore calls 264.
             const auto relative = static_cast<std::int64_t>(caller.common) + target - 600100;
-            const auto last = static_cast<std::int64_t>(project_.at("common").at("events").size()) - 1;
+            const auto last = static_cast<std::int64_t>(project_->at("common").at("events").size()) - 1;
             target = 500000 + static_cast<int>(std::clamp(relative, std::int64_t{0}, last));
         }
         if (target < 500000 || target >= 600000) fail("Map-event insertion is not implemented");
@@ -494,8 +504,8 @@ void Runtime::picture(const Json& cmd, Context c) {
     for (int i = 0; i < 3; ++i) record[std::array<const char*, 3>{"red", "green", "blue"}[i]] = color_mode == 2 ? number(arg(cmd, 15 + i), c) : 100;
     if (kind == 2) {
         record["text_style"] = {{"size", number(9000008)}, {"shadow", number(9000021)},
-            {"speed", 0}, {"antialias", project_.at("game").value("flags", Json::array()).size() > 14 ?
-                project_.at("game").at("flags").at(14).get<int>() : 0}};
+            {"speed", 0}, {"antialias", project_->at("game").value("flags", Json::array()).size() > 14 ?
+                project_->at("game").at("flags").at(14).get<int>() : 0}};
         record["text_reveal"] = {{"times", text_reveal_times(record.at("content"), number(9000011))}};
     }
     const Json action = {{"id", id}, {"operation", 0}, {"duration", duration}, {"values", record},
@@ -565,6 +575,14 @@ void Runtime::apply_picture_change(const Json& action) {
     auto target = show ? action.at("values") : previous;
     target.erase("tween"); target.erase("fade_erase");
     if (show) {
+        // Show also replaces an existing picture. The editor's "same value"
+        // fields retain its state just as they do for a move, including blend.
+        for (const auto& [field, fallback] : std::vector<std::pair<std::string, int>>{
+                {"pattern", 1}, {"opacity", 255}, {"x", 0}, {"y", 0},
+                {"zoom", 100}, {"zoom_y", 100}, {"angle", 0}})
+            if (target.at(field) == -1000000) target[field] = previous.value(field, fallback);
+        for (const char* field : {"anchor", "blend"})
+            if (target.at(field) == 15) target[field] = previous.value(field, 0);
         if (previous.contains("flicker")) target["flicker"] = previous.at("flicker");
         if (previous.contains("draw_shift")) target["draw_shift"] = previous.at("draw_shift");
         if (previous.contains("shake")) target["shake"] = previous.at("shake");
@@ -636,7 +654,7 @@ void Runtime::advance_pictures() {
         }
         if (picture.contains("text_reveal")) {
             const auto& reveal = picture.at("text_reveal");
-            const double age = static_cast<double>(frame_ - reveal.at("start").get<std::uint64_t>()) / project_.at("game").at("fps").get<int>();
+            const double age = static_cast<double>(frame_ - reveal.at("start").get<std::uint64_t>()) / project_->at("game").at("fps").get<int>();
             int visible = 0;
             for (const auto& time : reveal.at("times")) { if (time.get<double>() > age + 1e-9) break; ++visible; }
             picture["text_style"]["visible_chars"] = visible;
@@ -746,8 +764,10 @@ void Runtime::transfer(const Json& cmd, Context context) {
             const int setting = settings.at(1 + kind);
             if (setting != -2 && setting != -1) fail("Database/filename destination-map audio is not implemented");
         }
-        for (int kind = 0; kind < 2; ++kind) if (settings.at(1 + kind) == -1)
+        for (int kind = 0; kind < 2; ++kind) if (settings.at(1 + kind) == -1) {
             audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1}, {"fade_ms", 0}});
+            music_.erase(std::to_string(kind));
+        }
     }
     const int scale = arg(cmd, 4) & 1 ? 1 : 2;
     hero_x_ = number(arg(cmd, 1), context) * scale; hero_y_ = number(arg(cmd, 2), context) * scale;
@@ -979,22 +999,38 @@ void Runtime::execute(Run& run, const Json& cmd) {
             if (cmd.at("args").size() != 4 || !cmd.at("strings").empty() || value(2) != 0 || value(3) != 0)
                 fail("Unsupported music-stop layout");
             audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1},
-                {"fade_ms", std::max(0, value(1)) * 1000 / project_.at("game").at("fps").get<int>()}});
+                {"fade_ms", std::max(0, value(1)) * 1000 / project_->at("game").at("fps").get<int>()}});
+            music_.erase(std::to_string(kind));
             return;
         }
         if (kind > 2 || arg(cmd, 0) != (0x02000000 | (kind << 4)) ||
             cmd.at("args").size() != (kind == 2 ? 6 : 7) || cmd.at("strings").size() != 1 || value(2) != 0)
             fail("Unsupported sound-command layout (filename playback only)");
-        if (value(5) < 0) fail("Negative sound frequency is not supported");
-        const int frequency = value(5) == 0 ? 100 : value(5);
-        const Json event = {{"operation", "play"}, {"kind", kind}, {"file", expand(cmd.at("strings").at(0), context)},
-            {"channel", kind == 2 ? value(3) : 0}, {"volume", value(4)}, {"tempo", frequency},
-            {"start_ms", kind == 2 ? 0 : std::max(0, value(3))}, {"loop_ms", kind == 2 ? 0 : value(6)},
-            {"fade_ms", kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_.at("game").at("fps").get<int>()}};
+        auto file = expand(cmd.at("strings").at(0), context);
+        int volume = value(4), frequency = value(5), loop = kind == 2 ? 0 : value(6);
+        if (file.find_first_of("\r\n") != std::string::npos) {
+            std::istringstream stream(file); std::vector<std::string> lines; std::string line;
+            while (std::getline(stream, line)) { if (!line.empty() && line.back() == '\r') line.pop_back(); lines.push_back(line); }
+            if (lines.size() < 3 || lines.size() > (kind == 2 ? 3u : 4u)) fail("Unsupported inline sound metadata");
+            auto integer = [&](std::size_t index) {
+                std::size_t used = 0; const int result = std::stoi(lines.at(index), &used);
+                if (used != lines.at(index).size()) fail("Invalid inline sound metadata");
+                return result;
+            };
+            file = lines.at(0); volume = integer(1); frequency = integer(2);
+            if (lines.size() == 4) loop = integer(3);
+        }
+        if (frequency < 0) fail("Negative sound frequency is not supported");
+        if (frequency == 0) frequency = 100;
+        const Json event = {{"operation", "play"}, {"kind", kind}, {"file", file},
+            {"channel", kind == 2 ? value(3) : 0}, {"volume", volume}, {"tempo", frequency},
+            {"start_ms", kind == 2 ? 0 : std::max(0, value(3))}, {"loop_ms", loop},
+            {"fade_ms", kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_->at("game").at("fps").get<int>()}};
         const int delay = kind == 2 ? std::max(0, value(1)) : 0;
         if (delay) pending_audio_.push_back({{"start", frame_ + delay}, {"event", event}});
         else audio_.push_back(event);
-        if (kind < 2) { set_number(9000095 + kind * 2, value(4)); set_number(9000096 + kind * 2, frequency); }
+        if (kind < 2) remember_music(event);
+        if (kind < 2) { set_number(9000095 + kind * 2, volume); set_number(9000096 + kind * 2, frequency); }
         return;
     }
     case 123: {
@@ -1020,6 +1056,16 @@ void Runtime::execute(Run& run, const Json& cmd) {
     case 202: run.waiting_all_routes = true; return;
     case 270: party(cmd, context); return;
     case 221: case 222: saved_variable(cmd, context); return;
+    case 220: game_save_load(run, cmd); return;
+    case 1000: {
+        const int operation = arg(cmd, 0);
+        if (cmd.at("args").size() != 1 || cmd.at("strings").size() != 1 || (operation != 0 && operation != 3 && operation != 4))
+            fail("Unsupported screenshot/file-operation layout");
+        if (save_root_.empty()) fail("Game file operations require persistent native storage");
+        file_operations_.push_back({{"operation", operation}, {"path", expand(cmd.at("strings").at(0), context)}});
+        run.wake = frame_ + 1;
+        return;
+    }
     case 160:
         if (cmd.at("args").size() != 2) fail("Unexpected transition configuration layout");
         transition_ = {{"id", value(0)}, {"frames", arg(cmd, 1) & 65535},
@@ -1079,7 +1125,7 @@ void Runtime::execute(Run& run, const Json& cmd) {
         const char* names[] = {"mutable", "system", "user"};
         int type_id = value(0), row_id = value(1), field_id = value(2);
         const int named = (options >> 16) & 7;
-        const auto& original_types = project_.at("databases").at(names[bank]).at("types");
+        const auto& original_types = project_->at("databases").at(names[bank]).at("types");
         if (named && cmd.at("strings").size() != 4) fail("Named database command has no name table");
         if (named & 1) {
             const std::string label = cmd.at("strings").at(1);
@@ -1202,6 +1248,11 @@ void Runtime::execute(Run& run, const Json& cmd) {
 }
 
 Json Runtime::take_audio() { Json result = std::move(audio_); audio_ = Json::array(); return result; }
+Json Runtime::take_file_operations() {
+    Json result = std::move(file_operations_); file_operations_ = Json::array();
+    if (!result.empty()) resources_->invalidate();
+    return result;
+}
 
 Json Runtime::diagnostics() const {
     Json counts = Json::object();
@@ -1241,12 +1292,12 @@ Json Runtime::snapshot() const {
         {"target", route.target}, {"source", route.source}, {"common", route.context.common},
         {"event", route.context.event}, {"page", route.context.page}, {"map", route.context.map}});
     std::ostringstream rng; rng << random_;
-    return {{"format", "wolf-ios-state"}, {"version", 6}, {"title", project_.at("game").at("title")}, {"project_id", project_id_},
+    return {{"format", "wolf-ios-state"}, {"version", 6}, {"title", project_->at("game").at("title")}, {"project_id", project_id_},
         {"frame", frame_}, {"play_time_ticks", play_time_ticks_}, {"map", map_}, {"hero_x", hero_x_}, {"hero_y", hero_y_},
         {"numbers", numbers}, {"strings", strings}, {"databases", databases_}, {"pictures", pictures_},
         {"runs", runs}, {"rng", rng.str()}, {"message", message_}, {"transition", transition_},
         {"characters", characters_}, {"party", party_}, {"routes", routes}, {"next_route", next_route_},
-        {"pending_picture_erases", pending_picture_erases_}, {"pending_picture_changes", pending_picture_changes_}, {"choice", choice_}, {"choice_clear_after", choice_clear_after_}, {"message_state", message_state_},
+        {"pending_picture_erases", pending_picture_erases_}, {"pending_picture_changes", pending_picture_changes_}, {"choice", choice_}, {"choice_clear_after", choice_clear_after_}, {"message_state", message_state_}, {"music", music_},
         {"input_permissions", input_permissions_}, {"mouse_enabled", mouse_enabled_}, {"pending_auto_input", pending_auto_input_}, {"pending_audio", pending_audio_},
         {"previous_input", {{"up", previous_input_.up}, {"down", previous_input_.down}, {"left", previous_input_.left}, {"right", previous_input_.right},
             {"confirm", previous_input_.confirm}, {"cancel", previous_input_.cancel}, {"sub", previous_input_.sub},
@@ -1256,9 +1307,9 @@ Json Runtime::snapshot() const {
 
 void Runtime::restore(const Json& state) {
     if (state.at("format") != "wolf-ios-state" || state.at("version") != 6 ||
-        state.at("title") != project_.at("game").at("title") || state.at("project_id") != project_id_)
+        state.at("title") != project_->at("game").at("title") || state.at("project_id") != project_id_)
         fail("Incompatible native save: source game data differs");
-    Runtime candidate(project_, save_root_, asset_root_);
+    Runtime candidate(project_, save_root_, asset_root_, resource_root_, project_id_);
     candidate.frame_ = state.at("frame"); candidate.map_ = state.at("map");
     candidate.play_time_ticks_ = state.at("play_time_ticks");
     candidate.hero_x_ = state.at("hero_x"); candidate.hero_y_ = state.at("hero_y");
@@ -1273,6 +1324,8 @@ void Runtime::restore(const Json& state) {
     candidate.mouse_enabled_ = state.at("mouse_enabled");
     candidate.pending_auto_input_ = state.at("pending_auto_input");
     candidate.pending_audio_ = state.value("pending_audio", Json::array());
+    candidate.music_ = state.value("music", Json::object());
+    candidate.resume_music();
     if (!candidate.pending_audio_.is_array()) fail("Invalid saved delayed sound queue");
     for (const auto& pending : candidate.pending_audio_) {
         (void)pending.at("start").get<std::uint64_t>();

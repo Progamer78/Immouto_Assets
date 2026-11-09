@@ -25,7 +25,7 @@ python tools/prepare_game.py --stage
 build/windows-app/WolfPort.exe build/game
 ```
 
-The frontend renders the original title prompt, main menu, opening dialogue and initial choices. Recorded input selects New Game, performs its initial transfers, dismisses the notice and selects the language menu. A longer interpreter replay reaches frame 12,200 without a compatibility stop, but rendering that endpoint fails on a retained picture-blend setting. Map drawing, movement/collision and complete game save/load remain unfinished. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
+The frontend renders the original title prompt, main menu, opening dialogue, choices and home screen. Recorded input advances the opening, opens Save and writes slot 2 with its original menu details and a native JPEG thumbnail. Full native save/load commands and partial saved-variable/database reads now have regression coverage. Map drawing, movement/collision and broader gameplay remain unfinished; original Windows saves are incompatible. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
 
 With an existing C++17 toolchain and CMake, the portable core can instead be built without SDL:
 

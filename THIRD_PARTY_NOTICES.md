@@ -4,6 +4,8 @@ Original game content belongs to its respective rights holders and is supplied s
 
 ## Bundled libraries
 
+Native screenshots additionally use `stb_image_write.h` from the same pinned stb revision `4e9b368bfc071e97206ea5c6adba68dd0cbf8897`, under its included MIT/public-domain license. Upstream header SHA-256: `cbd5f0ad7a9cf4468affb36354a1d2338034f2c12473cf1a8e32053cb6914a05`. A local patch makes the JPEG bit accumulator unsigned, preserving its intended wrapping shifts without undefined signed overflow. Patched header SHA-256: `6f124ab45c084a89923c06f4bfddd3b723e89334ed31aa5fb63c8460e948c42e`.
+
 - **nlohmann/json 3.12.0**, MIT, by Niels Lohmann and contributors. Header SHA-256: `aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63`. Full license: [third_party/nlohmann/LICENSE.MIT](third_party/nlohmann/LICENSE.MIT). [Upstream](https://github.com/nlohmann/json/tree/v3.12.0).
 - **stb**, revision `4e9b368bfc071e97206ea5c6adba68dd0cbf8897`, MIT or public domain. `stb_image.h` provides original PNG/JPEG decoding; `stb_vorbis.c` supplies Ogg Vorbis decoding (SHA-256 `4c7cb2ff1f7011e9d67950446b7eb9ca044f2e464d76bfbb0b84dd2e23e65636`); `stb_truetype.h` is retained for upcoming font rendering. Full license: [third_party/stb/LICENSE](third_party/stb/LICENSE). [Upstream](https://github.com/nothings/stb).
 - **miniaudio 0.11.23**, revision `f40cf03f80cdb7e741d43e53b7e706e8c1394bcf`, MIT or public domain. Native mixing, decoding and resampling, using SDL for the output device. Header SHA-256 `7e4f3f13c8fe66df2080ac3dd12a89193e3c2463cb7f067c798abd7331cd8ee6`. [Upstream](https://github.com/mackron/miniaudio/tree/0.11.23), [license](third_party/miniaudio/LICENSE).

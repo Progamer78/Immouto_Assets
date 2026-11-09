@@ -1270,5 +1270,30 @@
         ]
       }
     ]
+  },
+  "file_operations": {
+    "method": "Supplied Game.exe, isolated copied fixture; copied common/map/config files and archives restored afterward.",
+    "modes": {
+      "0": "JPEG screenshot",
+      "4": "PNG screenshot",
+      "3": "delete named file"
+    },
+    "images": {
+      "jpg": {
+        "dimensions": [
+          1024,
+          576
+        ],
+        "sha256": "ab57c6974a0c846c57dd9721ed2ab7c268cd7259c534ddc7b198446d6a4edc39"
+      },
+      "png": {
+        "dimensions": [
+          1024,
+          576
+        ],
+        "sha256": "9d2551298c3f81550bde369164a1af0016b5dc5a7a17820a48e1adec7df27c71"
+      }
+    },
+    "delete_probe_absent": true
   }
 }

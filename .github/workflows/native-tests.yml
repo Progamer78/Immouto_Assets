@@ -55,3 +55,5 @@ jobs:
         run: |
           cmake -S . -B build -DWOLF_BUILD_APP=ON -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --parallel 4
+      - name: Test native renderer screenshot files
+        run: ctest --test-dir build -C Release --output-on-failure

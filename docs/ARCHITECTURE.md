@@ -45,7 +45,11 @@ Each running event has a stack of frames, program counters, loop counters, a wak
 
 Variable banks distinguish ordinary, system, common-self and per-map event-self state. Database operations resolve explicit name flags; numeric table IDs can be stale when a name is selected. This was observed in real startup commands and independently supported by WOLF's documentation and the Rust parser.
 
-Native development snapshots capture all currently implemented state, including variables, strings, databases, pictures, character properties/routes, stacks, loop counters, wake frames and RNG state. Writes use a flushed temporary file and atomic replacement. Original Windows saves and whole-game SaveLoad are not yet supported. Separate partial variable files support commands 221/222 for settings/unlocks. A halted interpreter cannot create a snapshot that would skip the failed command on resume.
+Native development snapshots capture all currently implemented state, including variables, strings, databases, pictures, character properties/routes, stacks, loop counters, wake frames and RNG state. Writes use a flushed temporary file and atomic replacement. Command 220 stores that implemented game state in a native JSON slot; commands 221/222 access the same slot's variables for settings/unlocks and menu details. Saved database reads support the computed addresses used by the original save menu. These files do not import original Windows saves. A halted interpreter cannot create a development snapshot that would skip the failed command on resume.
+
+In-game Load validates a candidate state before replacement, clears running events and reserved picture/audio work, and restarts scheduling according to the [documented Load behavior](https://silversecond.com/WolfRPGEditor/Help/04ev_file.html). Development resume instead continues saved event stacks. Music metadata retains the current track and an estimated simulation-clock playback position; native seeking resumes it, but device audio synchronization is unverified. Candidate restoration shares the immutable converted game data to avoid duplicating the large event tree.
+
+Screenshot commands use an offscreen game-resolution render target. JPEG and PNG readback excludes the touchscreen control strip; generated previews and permitted file deletions stay in writable app storage. The original asset directory is unchanged. File-existence/image queries and the renderer use the same writable overlay. Software-renderer tests encode and decode both formats and check dimensions/colors and selective thumbnail deletion.
 
 Version 6 development snapshots also retain blocking-message progress, delayed picture changes, delayed SE dispatch, clock counters and input permissions. Immediate hero transfers preserve the blocking caller and remove the previous map's parallel runs. Coordinates retain half-tile units. These scheduling/transfer rules still need broader original-engine comparisons.
 
@@ -69,5 +73,7 @@ Large IPAs are published as private Release attachments, not Actions artifacts. 
 - [Database name selection](https://silversecond.com/WolfRPGEditor/Help/04ev_db.html)
 - [Variable addressing](https://silversecond.com/WolfRPGEditor/Help/06valueget.html)
 - [System variables](https://silversecond.com/WolfRPGEditor/Help/06systemvalue.html)
+- [Save/load and partial saved variables](https://silversecond.com/WolfRPGEditor/Help/04ev_file.html)
+- [Inline sound volume/frequency metadata](https://silversecond.com/WolfRPGEditor/Help/04ev_sound.html)
 - [SDL iOS integration and lifecycle](https://wiki.libsdl.org/SDL2/README-ios)
 - [GitHub Xcode signing](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)

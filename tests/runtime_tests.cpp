@@ -2,6 +2,8 @@
 #include "asset_cache.hpp"
 #include "input_replay.hpp"
 #include "text.hpp"
+#include "shapes.hpp"
+#include "images.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -538,6 +540,172 @@ void choice_mouse_selects_clicked_row_and_rejects_outside_click() {
     REQUIRE(loaded.choice().at("selected") == 1); REQUIRE(loaded.choice().at("done") == true);
     loaded.tick(); REQUIRE(loaded.number(2000000) == 20); REQUIRE(loaded.error().empty());
 }
+void picture_show_retains_fields_and_uses_defaults_for_new_ids() {
+    wolf::Runtime rt(project({
+        cmd(150, {0x1100, 1, 0, 3, 2, 4, 180, 20, 30, 125, 450}, 0, {"old.png"}),
+        cmd(150, {0xff00, 1, 0, 3, 2, -1000000, -1000000, -1000000, -1000000, -1000000, -1000000}, 0, {"new.png"}),
+        cmd(150, {0xff20, 2, 0, 1, 1, -1000000, -1000000, -1000000, -1000000, -1000000, -1000000}, 0, {"text"})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    const auto& old = rt.pictures().at("1");
+    REQUIRE(old.at("content") == "new.png"); REQUIRE(old.at("blend") == 1); REQUIRE(old.at("anchor") == 1);
+    REQUIRE(old.at("pattern") == 4); REQUIRE(old.at("opacity") == 180); REQUIRE(old.at("x") == 20);
+    REQUIRE(old.at("y") == 30); REQUIRE(old.at("zoom") == 125); REQUIRE(old.at("angle") == 450);
+    const auto& fresh = rt.pictures().at("2");
+    REQUIRE(fresh.at("blend") == 0); REQUIRE(fresh.at("anchor") == 0); REQUIRE(fresh.at("pattern") == 1);
+    REQUIRE(fresh.at("opacity") == 255); REQUIRE(fresh.at("x") == 0); REQUIRE(fresh.at("zoom_y") == 100);
+}
+void delayed_picture_show_retains_values_at_activation() {
+    wolf::Runtime rt(project({
+        cmd(150, {0x100, 1, 0, 1, 1, 1, 180, 20, 30, 125, 450}, 0, {"old.png"}),
+        cmd(150, {0xf00, 1, 0, 1, 1, 1, -1000000, -1000000, -1000000, -1000000, -1000000, 0, 0, 2}, 0, {"new.png"}),
+        cmd(150, {0x3001, 1, 0, 1, 1, 1, 90, 80, 70, 200, 900})}));
+    rt.start_common(0); rt.tick(); rt.tick(); rt.tick(); REQUIRE(rt.error().empty());
+    const auto& picture = rt.pictures().at("1");
+    REQUIRE(picture.at("content") == "new.png"); REQUIRE(picture.at("blend") == 0);
+    REQUIRE(picture.at("opacity") == 90); REQUIRE(picture.at("x") == 80); REQUIRE(picture.at("zoom") == 200);
+    REQUIRE(picture.at("angle") == 900);
+}
+void full_game_save_survives_restart_and_shares_partial_variables() {
+    const auto base = std::filesystem::temp_directory_path() / ("wolf-full-save-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto p = project({cmd(121, {2000000, 41, 0, 0}), cmd(121, {1100000000, 987, 0, 0}),
+        cmd(122, {3000001, 0}, 0, {"saved text"}), cmd(130, {-1, 5, 7, 0, 1}),
+        cmd(150, {0, 1, 0, 1, 1, 1, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(140, {0x02000000, 0, 0, 0, 40, 100, 0}, 0, {"music.ogg"}), cmd(180, {3}),
+        cmd(220, {0, 3000007}), cmd(121, {2000000, 999, 0, 0}), cmd(180, {1000})});
+    auto loader = p["common"]["events"][0]; loader["id"] = 1;
+    loader["commands"] = Json::array({cmd(220, {1, 3000007}), cmd(121, {2000099, 999, 0, 0})});
+    p["common"]["events"].push_back(loader);
+    auto partial = loader; partial["id"] = 2;
+    partial["commands"] = Json::array({cmd(221, {2000005, 3000007, 2000000, 0}),
+        cmd(221, {2000006, 3000007, 9000024, 0}), cmd(222, {2000007, 3000007, 2000000, 0})});
+    p["common"]["events"].push_back(partial);
+    {
+        wolf::Runtime writer(p, base.u8string()); writer.set_text(3000007, "Save/Slot1.sav");
+        writer.set_number(1100000, 23, {-1, 2, 0, 0}); writer.start_common(0);
+        for (int i = 0; i < 4; ++i) writer.tick();
+        REQUIRE(writer.error().empty()); REQUIRE(writer.number(2000000) == 999);
+        REQUIRE(std::filesystem::exists(base / "save/slot1.sav.json"));
+    }
+    wolf::Runtime reader(p, base.u8string()); reader.set_text(3000007, "save/SLOT1.SAV");
+    reader.set_number(2000007, 77); reader.start_common(2); reader.tick();
+    REQUIRE(reader.error().empty()); REQUIRE(reader.number(2000005) == 41); REQUIRE(reader.number(2000006) == 1);
+    reader.start_common(1); reader.tick(); REQUIRE(reader.error().empty());
+    REQUIRE(reader.number(2000000) == 77); REQUIRE(reader.number(2000099) == 0);
+    REQUIRE(reader.number(1100000000) == 987); REQUIRE(reader.text(3000001) == "saved text");
+    REQUIRE(reader.number(1100000, {-1, 2, 0, 0}) == 23);
+    const auto restored = reader.snapshot();
+    REQUIRE(restored.at("hero_x") == 5); REQUIRE(restored.at("hero_y") == 7);
+    REQUIRE(restored.at("runs").empty()); REQUIRE(restored.at("pictures").at("1").at("x") == 20);
+    REQUIRE(restored.at("play_time_ticks") == 3);
+    const auto audio = reader.take_audio(); REQUIRE(audio.size() == 4);
+    REQUIRE(audio.at(3).at("operation") == "play"); REQUIRE(audio.at(3).at("resume_position_ms") == 50.0);
+    std::filesystem::remove_all(base);
+}
+void missing_game_save_continues_and_parallel_load_is_rejected() {
+    const auto p = project({cmd(220, {1, 3}), cmd(121, {2000000, 77, 0, 0})});
+    wolf::Runtime missing(p); missing.start_common(0); missing.tick();
+    REQUIRE(missing.error().empty()); REQUIRE(missing.number(2000000) == 77);
+    auto parallel = p; parallel["common"]["events"][0]["mode"] = 3;
+    wolf::Runtime invalid(parallel); invalid.tick(); REQUIRE(!invalid.error().empty());
+    REQUIRE(invalid.number(2000000) == 0);
+}
+void saved_database_fields_use_the_slot_not_live_memory() {
+    const auto temporary = std::filesystem::temp_directory_path();
+    const auto base = temporary / ("wolf-saved-db-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto p = project({cmd(220, {0, 2}), cmd(180, {100})});
+    auto reader = p["common"]["events"][0]; reader["id"] = 1;
+    reader["commands"] = Json::array({cmd(221, {2000001, 2, 2000005, 1}),
+        cmd(221, {3000001, 2, 2000006, 1}), cmd(221, {2000002, 2, 2000007, 1})});
+    p["common"]["events"].push_back(reader);
+    {
+        wolf::Runtime writer(p, base.u8string()); writer.set_number(1100000000, 81);
+        writer.set_text(1100000001, "slot value"); writer.set_number(2000010, 97);
+        writer.start_common(0); writer.tick(); REQUIRE(writer.error().empty());
+    }
+    wolf::Runtime rt(p, base.u8string()); rt.set_number(1100000000, 999); rt.set_text(1100000001, "live value");
+    rt.set_number(2000005, 1100000000); rt.set_number(2000006, 1100000001); rt.set_number(2000007, 2000010);
+    rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000001) == 81); REQUIRE(rt.text(3000001) == "slot value"); REQUIRE(rt.number(2000002) == 97);
+    REQUIRE(rt.number(1100000000) == 999); REQUIRE(rt.text(1100000001) == "live value");
+    REQUIRE(base.parent_path() == temporary); std::filesystem::remove_all(base);
+}
+void game_load_discards_pending_work_and_rebases_picture_ages() {
+    const auto base = std::filesystem::temp_directory_path() / ("wolf-load-reset-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto p = project({cmd(150, {0, 1, 0, 1, 1, 1, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(290, {48, 20, 1, 1, 0, 10, 99999}),
+        cmd(150, {1, 1, 0, 1, 1, 1, 255, 90, 90, 100, 0, 0, 0, 10}),
+        cmd(140, {0x02000020, 10, 0, 0, 100, 100}, 0, {"se.wav"}),
+        cmd(220, {0, 3}), cmd(180, {1000})});
+    auto loader = p["common"]["events"][0]; loader["id"] = 1;
+    loader["commands"] = Json::array({cmd(220, {1, 3})}); p["common"]["events"].push_back(loader);
+    wolf::Runtime rt(p, base.u8string()); rt.start_common(0); rt.tick();
+    REQUIRE(rt.error().empty()); const auto initial = rt.snapshot();
+    REQUIRE(initial.at("pending_picture_changes").size() == 1); REQUIRE(initial.at("pending_audio").size() == 1);
+    for (int i = 0; i < 25; ++i) rt.tick();
+    rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty()); const auto loaded = rt.snapshot();
+    REQUIRE(loaded.at("runs").empty()); REQUIRE(loaded.at("routes").empty());
+    REQUIRE(loaded.at("pending_picture_changes").empty()); REQUIRE(loaded.at("pending_audio").empty());
+    REQUIRE(rt.pictures().at("1").at("x") == 20); REQUIRE(rt.frame() == 27);
+    REQUIRE(wolf::picture_draw_offset(rt.pictures().at("1"), 28) == wolf::picture_draw_offset(initial.at("pictures").at("1"), 1));
+    std::filesystem::remove_all(base);
+}
+void corrupted_full_save_does_not_replace_live_state() {
+    const auto base = std::filesystem::temp_directory_path() / ("wolf-invalid-load-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto p = project({cmd(220, {1, 3})}); wolf::Runtime rt(p, base.u8string());
+    auto bad = rt.snapshot(); bad["project_id"] = "different game";
+    wolf::atomic_save((base / "save/savedata03.sav.json").u8string(), {{"format", "wolf-native-variables"}, {"version", 1},
+        {"project_id", rt.snapshot().at("project_id")}, {"numbers", Json::object()}, {"strings", Json::object()}, {"game", bad}});
+    rt.set_number(2000009, 55); rt.start_common(0); rt.tick();
+    REQUIRE(!rt.error().empty()); REQUIRE(rt.number(2000009) == 55);
+    std::filesystem::remove_all(base);
+}
+void builtin_shapes_have_expected_gradients_and_transparency() {
+    const auto gradient = wolf::shape_pixels("<GRADY-779-111>", 3, 5);
+    REQUIRE(gradient.at(0) == 198); REQUIRE(gradient.at(2) == 255); REQUIRE(gradient.at(4 * 3 * 4) == 28);
+    const auto frame = wolf::shape_pixels("<SQUARE><FRAME>", 3, 3);
+    REQUIRE(frame.at(3) == 255); REQUIRE(frame.at((1 * 3 + 1) * 4 + 3) == 0);
+    const auto circle = wolf::shape_pixels("<CIRCLE>", 10, 10);
+    REQUIRE(circle.at(3) == 0); REQUIRE(circle.at((5 * 10 + 5) * 4 + 3) == 255);
+    REQUIRE(!wolf::builtin_shape("<GRADY-ABC-111>"));
+}
+void writable_resources_override_assets_without_general_parent_traversal() {
+    const auto base = std::filesystem::temp_directory_path() / ("wolf-overlay-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto assets = base / "assets", storage = base / "storage";
+    wolf::atomic_write((assets / "Data/SC1.jpg").u8string(), "original");
+    wolf::atomic_write((storage / "Data/SC1.jpg").u8string(), "new screenshot");
+    wolf::atomic_write((storage / "save/preview.jpg").u8string(), "preview");
+    wolf::Resources resources(assets.u8string(), storage.u8string());
+    REQUIRE(resources.read_text("Data/SC1.jpg") == "new screenshot");
+    REQUIRE(resources.read_text("Data/../Save/preview.jpg") == "preview");
+    REQUIRE(resources.read_text("./Save/preview.jpg") == "preview");
+    bool rejected = false; try { resources.path("Data/../../outside.jpg"); } catch (...) { rejected = true; }
+    REQUIRE(rejected); wolf::Resources original(assets.u8string()); REQUIRE(original.read_text("Data/SC1.jpg") == "original");
+    std::filesystem::remove_all(base);
+}
+void screenshot_commands_yield_until_frontend_handles_the_request() {
+    const auto p = project({cmd(1000, {0}, 0, {"Save/preview.jpg"}), cmd(121, {2000000, 77, 0, 0})});
+    wolf::Runtime rt(p, "storage"); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000000) == 0); REQUIRE(rt.file_operations_pending());
+    const auto operations = rt.take_file_operations(); REQUIRE(operations.size() == 1);
+    REQUIRE(operations.at(0).at("operation") == 0); REQUIRE(operations.at(0).at("path") == "Save/preview.jpg");
+    rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000000) == 77);
+    wolf::Runtime unattended(p, "storage"); unattended.start_common(0); unattended.tick(); unattended.tick();
+    REQUIRE(!unattended.error().empty()); REQUIRE(unattended.number(2000000) == 0);
+}
+void image_brightening_clamps_rgb_and_preserves_alpha() {
+    const std::vector<unsigned char> original{128, 50, 200, 37, 0, 255, 100, 0};
+    const auto tinted = wolf::adjust_image_color(original, {200, 50, 125});
+    REQUIRE(tinted == std::vector<unsigned char>({255, 25, 250, 37, 0, 127, 125, 0}));
+    REQUIRE(original.at(0) == 128);
+}
+void inline_sound_metadata_overrides_command_fields() {
+    wolf::Runtime rt(project({cmd(140, {0x02000020, 0, 0, 0, 12, 50}, 0, {"se.ogg\r\n80\r\n100"}),
+        cmd(140, {0x02000000, 0, 0, 0, 12, 50, 0}, 0, {"bgm.ogg\n77\n125\n300"})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); const auto audio = rt.take_audio();
+    REQUIRE(audio.at(0).at("file") == "se.ogg"); REQUIRE(audio.at(0).at("volume") == 80); REQUIRE(audio.at(0).at("tempo") == 100);
+    REQUIRE(audio.at(1).at("file") == "bgm.ogg"); REQUIRE(audio.at(1).at("loop_ms") == 300);
+    REQUIRE(rt.number(9000095) == 77); REQUIRE(rt.number(9000096) == 125);
+}
 void game_clock_is_writable_and_survives_restore() {
     const auto p = project({cmd(180, {100})}); wolf::Runtime rt(p);
     rt.set_number(9000028, 9999999); rt.set_number(9000029, 7); rt.start_common(0); rt.tick();
@@ -581,6 +749,14 @@ int main() {
         arithmetic_ranges_match_windows_endpoints_and_aliasing(); arithmetic_range_random_draws_match_repeated_assignments();
         numeric_common_range_preserves_strings_and_other_events();
         picture_shake_matches_windows_samples_and_resume(); finite_picture_shake_returns_to_base_without_changing_queries();
-        std::cout << "47 native runtime tests passed\n"; return 0;
+        picture_show_retains_fields_and_uses_defaults_for_new_ids(); delayed_picture_show_retains_values_at_activation();
+        full_game_save_survives_restart_and_shares_partial_variables(); missing_game_save_continues_and_parallel_load_is_rejected();
+        saved_database_fields_use_the_slot_not_live_memory();
+        game_load_discards_pending_work_and_rebases_picture_ages(); corrupted_full_save_does_not_replace_live_state();
+        builtin_shapes_have_expected_gradients_and_transparency(); writable_resources_override_assets_without_general_parent_traversal();
+        screenshot_commands_yield_until_frontend_handles_the_request();
+        image_brightening_clamps_rgb_and_preserves_alpha();
+        inline_sound_metadata_overrides_command_fields();
+        std::cout << "59 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

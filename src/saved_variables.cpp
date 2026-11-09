@@ -12,10 +12,7 @@ bool Runtime::string_reference(int ref) {
         (ref >= 1600005 && ref <= 1600009) || (ref >= 15000000 && ref < 16000000 && ref % 100 >= 5 && ref % 100 <= 9);
 }
 
-void Runtime::saved_variable(const Json& cmd, Context context) {
-    if (cmd.at("args").size() != 4 || cmd.at("args").at(3) != 0)
-        fail("Indirect saved-variable access is not implemented");
-    const int identifier = cmd.at("args").at(1);
+std::string Runtime::save_name(int identifier, Context context) {
     std::string name;
     if (string_reference(identifier)) name = text(identifier, context);
     else {
@@ -30,6 +27,10 @@ void Runtime::saved_variable(const Json& cmd, Context context) {
     if (name.empty() || relative.is_absolute() || name.find_first_of("\\:%*?\"<>|") != std::string::npos || name.find("//") != std::string::npos)
         fail("Invalid native save filename");
     for (const auto& part : relative) if (part == "." || part == "..") fail("Native save filename escapes storage");
+    return name;
+}
+
+Json& Runtime::save_slot(const std::string& name) {
     const auto path = std::filesystem::u8path(save_root_) / std::filesystem::u8path(name + ".json");
     auto found = save_slots_.find(name);
     if (found == save_slots_.end()) {
@@ -41,23 +42,50 @@ void Runtime::saved_variable(const Json& cmd, Context context) {
             if (slot.at("format") != "wolf-native-variables" || slot.at("version") != 1 || slot.at("project_id") != project_id_)
                 fail("Incompatible native saved-variable file");
         }
-        // This cache contains only small variable files; full game saves use a
-        // separate format and cannot be mistaken for original Windows .sav data.
+        // Partial variables and a native game-state payload share each slot.
+        // The JSON envelope cannot be mistaken for a Windows save file.
         if (save_slots_.size() >= 64) {
             flush_saves(); save_slots_.clear();
         }
         found = save_slots_.emplace(name, std::move(slot)).first;
     }
-    auto& slot = found->second;
-    const int variable = cmd.at("args").at(2), live = cmd.at("args").at(0);
+    return found->second;
+}
+
+void Runtime::saved_variable(const Json& cmd, Context context) {
+    if (cmd.at("args").size() != 4 || (cmd.at("args").at(3) != 0 && cmd.at("args").at(3) != 1))
+        fail("Unsupported saved-variable command layout");
+    const auto name = save_name(cmd.at("args").at(1), context);
+    auto& slot = save_slot(name);
+    const int variable = cmd.at("args").at(3) == 1 ? number(cmd.at("args").at(2), context) : cmd.at("args").at(2).get<int>();
+    const int live = cmd.at("args").at(0);
     if (cmd.at("code") == 221) {
         if (variable == 9000024) { set_number(live, !slot.is_null(), context); return; }
+        if (variable >= 1000000000) {
+            const char* bank = nullptr; int offset = 0;
+            if (variable < 1100000000) { bank = "user"; offset = variable - 1000000000; }
+            else if (variable < 1200000000) { bank = "mutable"; offset = variable - 1100000000; }
+            else if (variable >= 1300000000 && variable < 1400000000) { bank = "system"; offset = variable - 1300000000; }
+            if (!bank) fail("Invalid saved database reference");
+            const Json* field = nullptr;
+            if (!slot.is_null() && slot.contains("game"))
+                field = &slot.at("game").at("databases").at(bank).at("types").at(offset / 1000000).at("rows")
+                    .at((offset % 1000000) / 100).at(offset % 100);
+            if (string_reference(live)) set_text(live, field ? field->get<std::string>() : "", context);
+            else set_number(live, field ? field->get<int>() : 0, context);
+            return;
+        }
         const std::string key = std::to_string(variable);
         if (string_reference(live)) {
             const std::string value = slot.is_null() ? "" : slot.at("strings").value(key, std::string{});
             set_text(live, value, context);
         } else {
-            const int value = slot.is_null() ? 0 : slot.at("numbers").value(key, 0);
+            int value = slot.is_null() ? 0 : slot.at("numbers").value(key, 0);
+            if (!slot.is_null() && slot.contains("game") && (variable == 9000029 || variable == 9000030)) {
+                const auto ticks = slot.at("game").at("play_time_ticks").get<std::uint64_t>();
+                const int fps = project_->at("game").at("fps");
+                value = variable == 9000029 ? ticks / fps : (ticks % fps) * 1000 / fps;
+            }
             set_number(live, value, context);
         }
     } else {
