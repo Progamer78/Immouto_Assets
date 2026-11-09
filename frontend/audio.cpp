@@ -1,10 +1,31 @@
 #include "audio.hpp"
 #include <SDL.h>
+#define STB_VORBIS_HEADER_ONLY
+#include <stb/stb_vorbis.c>
 #include <miniaudio/miniaudio.h>
 #include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <regex>
+#include <cstdio>
+
+namespace {
+ma_uint64 vorbis_file_length(const std::filesystem::path& path) {
+    // The Windows wide-path Vorbis stream uses miniaudio's push decoder, which
+    // cannot report its length. Probe the same file with stb's seeking reader.
+#ifdef _WIN32
+    auto* handle = _wfopen(path.c_str(), L"rb");
+#else
+    auto* handle = std::fopen(path.c_str(), "rb");
+#endif
+    std::unique_ptr<FILE, decltype(&std::fclose)> file(handle, std::fclose);
+    if (!file) return 0;
+    int error = 0;
+    std::unique_ptr<stb_vorbis, decltype(&stb_vorbis_close)> decoder(
+        stb_vorbis_open_file(file.get(), 0, &error, nullptr), stb_vorbis_close);
+    return decoder ? stb_vorbis_stream_length_in_samples(decoder.get()) : 0;
+}
+}
 
 struct Audio::Impl {
     struct Voice {
@@ -120,6 +141,8 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
                 position = static_cast<ma_uint64>(milliseconds * sample_rate / 1000);
                 ma_uint64 length = 0;
                 if (ma_sound_get_length_in_pcm_frames(&voice->sound, &length) != MA_SUCCESS || length == 0)
+                    length = vorbis_file_length(path);
+                if (length == 0)
                     throw std::runtime_error("Cannot determine saved music loop length");
                 const auto end = std::min(loop_end, length);
                 if (loop_start >= end) throw std::runtime_error("Invalid saved music loop interval");

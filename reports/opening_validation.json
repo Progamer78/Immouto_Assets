@@ -1,5 +1,5 @@
 {
-  "native_scenarios": 59,
+  "native_scenarios": 60,
   "python_tests_local": 14,
   "debug_and_release_core_passed": true,
   "windows_sdl_frontend_compiled": true,
@@ -148,5 +148,6 @@
     "frontend/file_operations.hpp": "81a16c220f2946a5c85943f450f04fb3f520baffcb3f2654801e662bd4c40e56",
     "frontend/ios_paths.mm": "2826c6616b56af5dd9f2990c3b36268c3197e5268da38aec528128443ab7e656",
     "frontend/main.cpp": "09704130e386be4ad88c8d9064ecd8ae00ae6da216e1c60edeff92fee394f3a3"
-  }
+  },
+  "save_load_checkpoint_source_commit": "c6bbbcfb456023fd5345a04fc7b0d2d1cd77875d"
 }

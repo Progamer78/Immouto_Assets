@@ -2,7 +2,7 @@
   "format": "wolf-command-inventory",
   "version": 1,
   "project_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c",
-  "runtime_source_sha256": "dfb8066ccfdc9518c9dbbd11a3909522a496a62a72684e05391cde0429422b47",
+  "runtime_source_sha256": "ebff38cfac68363aeb1766bdb7ad0b8e418d8426c6751a3704dd6b1f86f6b398",
   "limits": [
     "Static inventory; neither reachability nor full compatibility is established.",
     "A handler's presence does not mean its layouts, rendering or timing are supported.",

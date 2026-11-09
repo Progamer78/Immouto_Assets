@@ -627,7 +627,7 @@ void saved_database_fields_use_the_slot_not_live_memory() {
     rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty());
     REQUIRE(rt.number(2000001) == 81); REQUIRE(rt.text(3000001) == "slot value"); REQUIRE(rt.number(2000002) == 97);
     REQUIRE(rt.number(1100000000) == 999); REQUIRE(rt.text(1100000001) == "live value");
-    REQUIRE(base.parent_path() == temporary); std::filesystem::remove_all(base);
+    REQUIRE(std::filesystem::equivalent(base.parent_path(), temporary)); std::filesystem::remove_all(base);
 }
 void game_load_discards_pending_work_and_rebases_picture_ages() {
     const auto base = std::filesystem::temp_directory_path() / ("wolf-load-reset-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -706,6 +706,18 @@ void inline_sound_metadata_overrides_command_fields() {
     REQUIRE(audio.at(1).at("file") == "bgm.ogg"); REQUIRE(audio.at(1).at("loop_ms") == 300);
     REQUIRE(rt.number(9000095) == 77); REQUIRE(rt.number(9000096) == 125);
 }
+void optional_zero_se_field_preserves_playback_parameters() {
+    const auto play = cmd(140, {0x02000020, 3, 0, 2, 90, 110, 0}, 0, {"se.ogg"});
+    wolf::Runtime rt(project({play, cmd(180, {5})})); rt.start_common(0); rt.tick();
+    REQUIRE(rt.error().empty()); REQUIRE(rt.take_audio().empty());
+    for (int i = 0; i < 3; ++i) rt.tick();
+    const auto audio = rt.take_audio(); REQUIRE(audio.size() == 1);
+    REQUIRE(audio.at(0).at("file") == "se.ogg"); REQUIRE(audio.at(0).at("channel") == 2);
+    REQUIRE(audio.at(0).at("volume") == 90); REQUIRE(audio.at(0).at("tempo") == 110);
+    auto other = play; other["args"][6] = 1;
+    wolf::Runtime unsupported(project({other})); unsupported.start_common(0); unsupported.tick();
+    REQUIRE(!unsupported.error().empty());
+}
 void game_clock_is_writable_and_survives_restore() {
     const auto p = project({cmd(180, {100})}); wolf::Runtime rt(p);
     rt.set_number(9000028, 9999999); rt.set_number(9000029, 7); rt.start_common(0); rt.tick();
@@ -757,6 +769,7 @@ int main() {
         screenshot_commands_yield_until_frontend_handles_the_request();
         image_brightening_clamps_rgb_and_preserves_alpha();
         inline_sound_metadata_overrides_command_fields();
-        std::cout << "59 native runtime tests passed\n"; return 0;
+        optional_zero_se_field_preserves_playback_parameters();
+        std::cout << "60 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

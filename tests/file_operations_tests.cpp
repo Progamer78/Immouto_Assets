@@ -41,7 +41,7 @@ int main() {
         process_file_operations(renderer, writable, wolf::Json::array({{{"operation", 3}, {"path", "Save/preview.jpg"}}}), 64, 40);
         if (std::filesystem::exists(writable.path("Save/preview.jpg")) || !std::filesystem::exists(writable.path("Save/preview.png")))
             throw std::runtime_error("Thumbnail deletion affected the wrong file");
-        if (base.parent_path() != temporary || base.filename().u8string().compare(0, 17, "wolf-screenshots-") != 0)
+        if (!std::filesystem::equivalent(base.parent_path(), temporary) || base.filename().u8string().compare(0, 17, "wolf-screenshots-") != 0)
             throw std::runtime_error("Invalid screenshot test cleanup path");
         std::filesystem::remove_all(base);
         SDL_DestroyTexture(target); SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit();

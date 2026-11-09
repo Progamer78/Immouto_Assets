@@ -1003,8 +1003,10 @@ void Runtime::execute(Run& run, const Json& cmd) {
             music_.erase(std::to_string(kind));
             return;
         }
+        const auto count = cmd.at("args").size();
+        const bool extended_se = kind == 2 && count == 7 && arg(cmd, 6) == 0;
         if (kind > 2 || arg(cmd, 0) != (0x02000000 | (kind << 4)) ||
-            cmd.at("args").size() != (kind == 2 ? 6 : 7) || cmd.at("strings").size() != 1 || value(2) != 0)
+            (count != (kind == 2 ? 6u : 7u) && !extended_se) || cmd.at("strings").size() != 1 || value(2) != 0)
             fail("Unsupported sound-command layout (filename playback only)");
         auto file = expand(cmd.at("strings").at(0), context);
         int volume = value(4), frequency = value(5), loop = kind == 2 ? 0 : value(6);
