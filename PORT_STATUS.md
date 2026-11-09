@@ -56,6 +56,7 @@ Every unsupported command/layout stops and records its context and event stack. 
 - Windows native application and headless runtime compile using a workspace-local Zig/CMake/Ninja toolchain.
 - GitHub workflow syntax checked with checksum-verified actionlint 1.7.7.
 - First remote [native check run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780) passed: Windows, Linux and macOS core tests, plus macOS SDL frontend compilation. It completed in approximately 65 seconds including runner setup.
+- Latest [native checks](https://github.com/Progamer78/Immouto_Assets/actions/runs/42594309937) passed for checkpoint `bc74030`: all 13 runtime scenarios on Windows/Linux/macOS, archive/tool tests and macOS frontend compilation. The four supplied-game tests run locally; CI intentionally has no private game assets.
 - The current authoritative startup trace executes **4,069 command records**, then stops in common event **270** at command **210**, original archived CommonEvent.dat byte offset **2129483**, target **600094**. This encoded call mode remains unresolved; exploratory reference probes were inconclusive. See [reports/startup_trace.json](reports/startup_trace.json).
 - This is **before a verified native title screen**. Original Windows startup and two focused behavior checks were observed in an isolated copy. No native gameplay loop or iPhone gameplay test has been performed.
 
