@@ -14,7 +14,7 @@ class SourceSelectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             game = Path(temp) / "game"
             sources, details = resolve_data(game, Path(temp) / "cache")
-            self.assertEqual(sources["BasicData"], game / "Data/BasicData")
+            self.assertEqual(sources["BasicData"], (game / "Data/BasicData").resolve())
             self.assertEqual(details["MapData"]["kind"], "loose")
 
     def test_original_directory_cannot_be_used_as_extraction_cache(self):
