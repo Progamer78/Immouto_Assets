@@ -1,6 +1,6 @@
 # Monochrome native iOS port
 
-Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The complete game is not playable yet.** Native title-runtime checks passed on Windows, Linux and macOS, and an ARM64 iOS compilation check produced a 901 KB unsigned IPA without game assets. Local development now reaches opening dialogue and choices. See [PORT_STATUS.md](PORT_STATUS.md) for verified progress and remaining blockers.
+Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The complete game is not playable yet.** Native opening-runtime checks passed on Windows, Linux and macOS, and a cached ARM64 iOS compilation check produced a 958 KB unsigned IPA without game assets in 48 seconds. Local development reaches opening dialogue and choices; broader rendering and gameplay remain incomplete. See [PORT_STATUS.md](PORT_STATUS.md) for verified progress and remaining blockers.
 
 The supplied game files remain in their original directory. Git excludes the original game, generated game data, private asset archives, build outputs and signing material.
 
@@ -25,7 +25,7 @@ python tools/prepare_game.py --stage
 build/windows-app/WolfPort.exe build/game
 ```
 
-The frontend renders the original title prompt, main menu, opening dialogue and initial choices. Recorded input selects New Game, performs its initial transfers, dismisses the notice and selects the language menu. A longer replay currently stops at an unsupported music-stop command. Map drawing, movement/collision and complete game save/load remain unfinished. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
+The frontend renders the original title prompt, main menu, opening dialogue and initial choices. Recorded input selects New Game, performs its initial transfers, dismisses the notice and selects the language menu. A longer interpreter replay reaches frame 12,200 without a compatibility stop, but rendering that endpoint fails on a retained picture-blend setting. Map drawing, movement/collision and complete game save/load remain unfinished. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
 
 With an existing C++17 toolchain and CMake, the portable core can instead be built without SDL:
 
@@ -52,7 +52,7 @@ The source is connected to the private [Progamer78/Immouto_Assets repository](ht
 
 The first [unsigned iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585937560) completed in 4 minutes 1 second, including setup, compilation, packaging and publication. Its [release](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-1-1) is a compilation-check artifact, not a playable game build. The downloaded IPA was checked for a valid ZIP, ARM64 executable, bundle identifier and iOS deployment target. Details are in [reports/ios_build_check.json](reports/ios_build_check.json).
 
-The expanded title-runtime [iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42618585767) passed in 4 minutes 12 seconds; compilation itself took 15 seconds. Its [901 KB unsigned IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-2-1) was downloaded and checked for ZIP integrity and ARM64 metadata. These timings exclude the game assets and signing, and do not validate the later dialogue changes or device gameplay.
+The opening-runtime [iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42634139411) for `59133fc` passed in **48 seconds overall**, with 6 seconds of configuration and 17 seconds of compilation. Its [958 KB unsigned IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-3-1) was downloaded and checked for ZIP integrity, digest and ARM64 metadata. These timings exclude game assets and signing; that build predates the later arithmetic-range/shake fixes and does not validate device gameplay.
 
 ## Fast development cycle
 
@@ -60,7 +60,7 @@ Most interpreter fixes are built and tested on Windows first. The iOS workflow c
 
 For repeated iPhone testing, install one full build with `include_game=true` and `reuse_assets=true`. On first launch it copies the versioned assets into app storage, displaying progress. Subsequent builds can use `include_game=false`, `reuse_assets=true`: they contain the runtime and reuse that installed data. Use the same app identifier/signing setup and **update the existing app without deleting its data**. If a sideloading method removes the app first, its data may need reinstalling too.
 
-This development mode temporarily keeps a bundled and a persistent copy on the first full install. Later thin updates remove the bundled copy. For a complete standalone build that reads bundled assets directly, use `include_game=true`, `reuse_assets=false`. Asset copying/reuse is tested on Windows; iPhone install/update behavior is not verified yet. Actual Actions timings must be measured on the first remote run.
+This development mode temporarily keeps a bundled and a persistent copy on the first full install. Later thin updates remove the bundled copy. For a complete standalone build that reads bundled assets directly, use `include_game=true`, `reuse_assets=false`. Asset copying/reuse is tested on Windows; iPhone install/update behavior and full-package Actions timings remain unverified. The measured cached source-only check took 48 seconds.
 
 On iPhone, the app's folder is exposed in **Files -> On My iPhone -> Monochrome**. `last-error.json` records event/command failures and original byte offsets; `crashes.txt` records best-effort fatal-signal breadcrumbs. The event diagnostic is tested locally. Native crash logging and Files access still need device testing. Windows diagnostics use SDL's preference directory; developers can set `WOLF_STORAGE_DIR` to a workspace directory while testing.
 

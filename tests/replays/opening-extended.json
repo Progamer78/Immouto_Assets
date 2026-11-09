@@ -1,0 +1,641 @@
+[
+  {
+    "frame": 60,
+    "confirm": true
+  },
+  {
+    "frame": 61
+  },
+  {
+    "frame": 150,
+    "confirm": true
+  },
+  {
+    "frame": 151
+  },
+  {
+    "frame": 600,
+    "confirm": true
+  },
+  {
+    "frame": 601
+  },
+  {
+    "frame": 700,
+    "mouse_x": 512,
+    "mouse_y": 350
+  },
+  {
+    "frame": 710,
+    "mouse_x": 512,
+    "mouse_y": 350,
+    "mouse_left": true
+  },
+  {
+    "frame": 711,
+    "mouse_x": 512,
+    "mouse_y": 350
+  },
+  {
+    "frame": 900,
+    "confirm": true
+  },
+  {
+    "frame": 901
+  },
+  {
+    "frame": 1300,
+    "confirm": true
+  },
+  {
+    "frame": 1301
+  },
+  {
+    "frame": 1600,
+    "confirm": true
+  },
+  {
+    "frame": 1601
+  },
+  {
+    "frame": 1900,
+    "confirm": true
+  },
+  {
+    "frame": 1901
+  },
+  {
+    "frame": 2200,
+    "confirm": true
+  },
+  {
+    "frame": 2201
+  },
+  {
+    "frame": 2320,
+    "confirm": true
+  },
+  {
+    "frame": 2321
+  },
+  {
+    "frame": 2440,
+    "confirm": true
+  },
+  {
+    "frame": 2441
+  },
+  {
+    "frame": 2560,
+    "confirm": true
+  },
+  {
+    "frame": 2561
+  },
+  {
+    "frame": 2680,
+    "confirm": true
+  },
+  {
+    "frame": 2681
+  },
+  {
+    "frame": 2800,
+    "confirm": true
+  },
+  {
+    "frame": 2801
+  },
+  {
+    "frame": 2920,
+    "confirm": true
+  },
+  {
+    "frame": 2921
+  },
+  {
+    "frame": 3040,
+    "confirm": true
+  },
+  {
+    "frame": 3041
+  },
+  {
+    "frame": 3160,
+    "confirm": true
+  },
+  {
+    "frame": 3161
+  },
+  {
+    "frame": 3280,
+    "confirm": true
+  },
+  {
+    "frame": 3281
+  },
+  {
+    "frame": 3400,
+    "confirm": true
+  },
+  {
+    "frame": 3401
+  },
+  {
+    "frame": 3520,
+    "confirm": true
+  },
+  {
+    "frame": 3521
+  },
+  {
+    "frame": 3640,
+    "confirm": true
+  },
+  {
+    "frame": 3641
+  },
+  {
+    "frame": 3760,
+    "confirm": true
+  },
+  {
+    "frame": 3761
+  },
+  {
+    "frame": 3880,
+    "confirm": true
+  },
+  {
+    "frame": 3881
+  },
+  {
+    "frame": 4000,
+    "confirm": true
+  },
+  {
+    "frame": 4001
+  },
+  {
+    "frame": 4120,
+    "confirm": true
+  },
+  {
+    "frame": 4121
+  },
+  {
+    "frame": 4240,
+    "confirm": true
+  },
+  {
+    "frame": 4241
+  },
+  {
+    "frame": 4360,
+    "confirm": true
+  },
+  {
+    "frame": 4361
+  },
+  {
+    "frame": 4480,
+    "confirm": true
+  },
+  {
+    "frame": 4481
+  },
+  {
+    "frame": 4600,
+    "confirm": true
+  },
+  {
+    "frame": 4601
+  },
+  {
+    "frame": 4720,
+    "confirm": true
+  },
+  {
+    "frame": 4721
+  },
+  {
+    "frame": 4840,
+    "confirm": true
+  },
+  {
+    "frame": 4841
+  },
+  {
+    "frame": 4960,
+    "confirm": true
+  },
+  {
+    "frame": 4961
+  },
+  {
+    "frame": 5080,
+    "confirm": true
+  },
+  {
+    "frame": 5081
+  },
+  {
+    "frame": 5200,
+    "confirm": true
+  },
+  {
+    "frame": 5201
+  },
+  {
+    "frame": 5320,
+    "confirm": true
+  },
+  {
+    "frame": 5321
+  },
+  {
+    "frame": 5440,
+    "confirm": true
+  },
+  {
+    "frame": 5441
+  },
+  {
+    "frame": 5560,
+    "confirm": true
+  },
+  {
+    "frame": 5561
+  },
+  {
+    "frame": 5680,
+    "confirm": true
+  },
+  {
+    "frame": 5681
+  },
+  {
+    "frame": 5800,
+    "confirm": true
+  },
+  {
+    "frame": 5801
+  },
+  {
+    "frame": 5920,
+    "confirm": true
+  },
+  {
+    "frame": 5921
+  },
+  {
+    "frame": 6200,
+    "confirm": true
+  },
+  {
+    "frame": 6201
+  },
+  {
+    "frame": 6320,
+    "confirm": true
+  },
+  {
+    "frame": 6321
+  },
+  {
+    "frame": 6440,
+    "confirm": true
+  },
+  {
+    "frame": 6441
+  },
+  {
+    "frame": 6560,
+    "confirm": true
+  },
+  {
+    "frame": 6561
+  },
+  {
+    "frame": 6680,
+    "confirm": true
+  },
+  {
+    "frame": 6681
+  },
+  {
+    "frame": 6800,
+    "confirm": true
+  },
+  {
+    "frame": 6801
+  },
+  {
+    "frame": 6920,
+    "confirm": true
+  },
+  {
+    "frame": 6921
+  },
+  {
+    "frame": 7040,
+    "confirm": true
+  },
+  {
+    "frame": 7041
+  },
+  {
+    "frame": 7160,
+    "confirm": true
+  },
+  {
+    "frame": 7161
+  },
+  {
+    "frame": 7280,
+    "confirm": true
+  },
+  {
+    "frame": 7281
+  },
+  {
+    "frame": 7400,
+    "confirm": true
+  },
+  {
+    "frame": 7401
+  },
+  {
+    "frame": 7520,
+    "confirm": true
+  },
+  {
+    "frame": 7521
+  },
+  {
+    "frame": 7640,
+    "confirm": true
+  },
+  {
+    "frame": 7641
+  },
+  {
+    "frame": 7760,
+    "confirm": true
+  },
+  {
+    "frame": 7761
+  },
+  {
+    "frame": 7880,
+    "confirm": true
+  },
+  {
+    "frame": 7881
+  },
+  {
+    "frame": 8000,
+    "confirm": true
+  },
+  {
+    "frame": 8001
+  },
+  {
+    "frame": 8120,
+    "confirm": true
+  },
+  {
+    "frame": 8121
+  },
+  {
+    "frame": 8240,
+    "confirm": true
+  },
+  {
+    "frame": 8241
+  },
+  {
+    "frame": 8360,
+    "confirm": true
+  },
+  {
+    "frame": 8361
+  },
+  {
+    "frame": 8480,
+    "confirm": true
+  },
+  {
+    "frame": 8481
+  },
+  {
+    "frame": 8600,
+    "confirm": true
+  },
+  {
+    "frame": 8601
+  },
+  {
+    "frame": 8720,
+    "confirm": true
+  },
+  {
+    "frame": 8721
+  },
+  {
+    "frame": 8840,
+    "confirm": true
+  },
+  {
+    "frame": 8841
+  },
+  {
+    "frame": 8960,
+    "confirm": true
+  },
+  {
+    "frame": 8961
+  },
+  {
+    "frame": 9080,
+    "confirm": true
+  },
+  {
+    "frame": 9081
+  },
+  {
+    "frame": 9200,
+    "confirm": true
+  },
+  {
+    "frame": 9201
+  },
+  {
+    "frame": 9320,
+    "confirm": true
+  },
+  {
+    "frame": 9321
+  },
+  {
+    "frame": 9440,
+    "confirm": true
+  },
+  {
+    "frame": 9441
+  },
+  {
+    "frame": 9560,
+    "confirm": true
+  },
+  {
+    "frame": 9561
+  },
+  {
+    "frame": 9680,
+    "confirm": true
+  },
+  {
+    "frame": 9681
+  },
+  {
+    "frame": 9800,
+    "confirm": true
+  },
+  {
+    "frame": 9801
+  },
+  {
+    "frame": 9920,
+    "confirm": true
+  },
+  {
+    "frame": 9921
+  },
+  {
+    "frame": 10040,
+    "confirm": true
+  },
+  {
+    "frame": 10041
+  },
+  {
+    "frame": 10160,
+    "confirm": true
+  },
+  {
+    "frame": 10161
+  },
+  {
+    "frame": 10280,
+    "confirm": true
+  },
+  {
+    "frame": 10281
+  },
+  {
+    "frame": 10400,
+    "confirm": true
+  },
+  {
+    "frame": 10401
+  },
+  {
+    "frame": 10520,
+    "confirm": true
+  },
+  {
+    "frame": 10521
+  },
+  {
+    "frame": 10640,
+    "confirm": true
+  },
+  {
+    "frame": 10641
+  },
+  {
+    "frame": 10760,
+    "confirm": true
+  },
+  {
+    "frame": 10761
+  },
+  {
+    "frame": 10880,
+    "confirm": true
+  },
+  {
+    "frame": 10881
+  },
+  {
+    "frame": 11000,
+    "confirm": true
+  },
+  {
+    "frame": 11001
+  },
+  {
+    "frame": 11120,
+    "confirm": true
+  },
+  {
+    "frame": 11121
+  },
+  {
+    "frame": 11240,
+    "confirm": true
+  },
+  {
+    "frame": 11241
+  },
+  {
+    "frame": 11360,
+    "confirm": true
+  },
+  {
+    "frame": 11361
+  },
+  {
+    "frame": 11480,
+    "confirm": true
+  },
+  {
+    "frame": 11481
+  },
+  {
+    "frame": 11600,
+    "confirm": true
+  },
+  {
+    "frame": 11601
+  },
+  {
+    "frame": 11720,
+    "confirm": true
+  },
+  {
+    "frame": 11721
+  },
+  {
+    "frame": 11840,
+    "confirm": true
+  },
+  {
+    "frame": 11841
+  },
+  {
+    "frame": 11960,
+    "confirm": true
+  },
+  {
+    "frame": 11961
+  },
+  {
+    "frame": 12080,
+    "confirm": true
+  },
+  {
+    "frame": 12081
+  }
+]

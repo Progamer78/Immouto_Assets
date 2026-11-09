@@ -1,9 +1,8 @@
 {
-  "native_scenarios": 39,
+  "native_scenarios": 47,
   "python_tests_local": 14,
   "debug_and_release_core_passed": true,
   "windows_sdl_frontend_compiled": true,
-  "ios_cpp_paths_compiled_locally": true,
   "captures": {
     "opening_dialogue": {
       "frame": 551,
@@ -50,8 +49,27 @@
   "full_game_playable": false,
   "device_tested": false,
   "current_stop": {
-    "frame": 3161,
-    "code": 140,
-    "offset": 46566
-  }
+    "phase": "renderer",
+    "frame": 12201,
+    "error": "Unsupported picture blend mode",
+    "picture_ids": [
+      1605,
+      1606,
+      1607,
+      1608,
+      1609
+    ],
+    "raw_blend_value": 15
+  },
+  "captures_source_commit": "59133fc2a9ef8e299b17e3dc1d380ead39a22c39",
+  "interpreter_replay": {
+    "input": "tests/replays/opening-extended.json",
+    "frame": 12200,
+    "started_from_clean_startup": true,
+    "compatibility_stop": false,
+    "is_full_gameplay_validation": false
+  },
+  "shake_reference_samples_matched": 240,
+  "whole_game_layout_groups": 639,
+  "whole_game_layout_inventory_is_compatibility_percentage": false
 }

@@ -138,8 +138,7 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         const float zoom = p.at("zoom").get<float>() / 100.f;
         const float zoom_y = p.at("angle") != 0 && !window ? zoom : p.at("zoom_y").get<float>() / 100.f;
         if (zoom < 0 || zoom_y < 0) throw std::runtime_error("Flipped picture rendering is not implemented");
-        const int shift_x = p.contains("draw_shift") ? p.at("draw_shift").at("x").get<int>() : 0;
-        const int shift_y = p.contains("draw_shift") ? p.at("draw_shift").at("y").get<int>() : 0;
+        const auto [shift_x, shift_y] = wolf::picture_draw_offset(p, frame);
         SDL_FRect destination{p.at("x").get<float>() + shift_x, p.at("y").get<float>() + shift_y, width * zoom, height * zoom_y};
         const int anchor = p.at("anchor");
         if (anchor == 1) { destination.x -= destination.w / 2; destination.y -= destination.h / 2; }

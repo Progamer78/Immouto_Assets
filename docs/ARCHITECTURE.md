@@ -15,10 +15,19 @@ Existing projects were inspected before this choice:
 | popupie/wolftools | fad1d573a3abb468f2d9a7510b0e77e9be023c45 | MIT archive/inspection/browser preparation tool. Not a native runtime. |
 | G1org1owo/wolfrpg-map-parser | 59dc4578c0b7cd925da47e33b02a5173aa4bb856 | MIT command framing and argument enums; independent reference for numeric operations, input, database and transition configuration. |
 | gdlbo/makerplay | c01d80a48200189fcf93f310cfffb12828c923f6 | Additional candidate reviewed during reassessment: Android integration with a Rust/SDL3 WOLF runtime. No reuse license was identified in the inspected repository root or crate manifest, and compatibility with this title/iOS was not tested. Its code has not been copied. |
+| Browser Woditor | 0.6.3.0, public package SHA256 `32b8b899a0e1e003b24b613ab86effe45a66f2ef1173aa4824a12380e55930fa` | Original WOLF runtime ported to the browser, rather than an independent engine reconstruction. The inspected package supplies WebAssembly/browser files and no native C/C++ source. Its bundled license explicitly says it is not open source. Its documented browser/app-wrapper route conflicts with this project's native/no-browser requirement; no native adaptation has been established. |
 
 This choice remains provisional. An existing runtime proven against this game, with appropriate reuse terms, could reduce the work. None of the inspected alternatives has established that result. The current C++/SDL approach meets the platform requirements, but full-game compatibility and the development effort remain unproven. The next useful acceptance gate is a new-game sequence followed by saving, quitting and loading; a compiled IPA or title screen does not satisfy it.
 
 The C++ interpreter executes original commands. Unknown command IDs or unsupported argument layouts stop execution and record the original byte offset and event context. Frame-based input replays and local renderer captures make failures reproducible without repeatedly building an IPA. Focused probes run the supplied Windows executable only in an isolated copy to check behavior that format descriptions leave uncertain.
+
+## Reassessment and development priorities
+
+Rechecked the candidates on 2026-11-09 after the user questioned the implementation cost. MakerPlay's public revision is unchanged; its crate describes Android JNI/GLES integration and still has no identified reuse license. The rpg-maker-clone project's own documentation records important incomplete behavior, including picture/window variants and partial full-game saving. Browser Woditor is a serious alternative if the browser restriction changes, but the inspected release does not supply a native source base. None of this proves our interpreter is the fastest possible route or that full compatibility will be achieved. A candidate that actually runs this game, has usable reuse terms and can be built natively for iOS would justify changing the decision.
+
+The new [whole-game layout inventory](../reports/command_variants.json) groups every converted command by arity and selected packed modes. Regenerate it with `python tools/inventory_commands.py build/game/game.json`. It identifies repeated implementation families and original locations so development need not discover every variant through a single sequential replay. A dispatch handler's presence is deliberately not reported as a compatibility percentage: its variants may be incomplete, and static counts say nothing about reachability, rendering or timing.
+
+Prioritize a complete gameplay loop and in-game save/quit/load before spending more time on pixel-level comparisons. Implement related documented variants together, exercise multiple replay branches locally, and use original-engine probes for behavior that remains uncertain and blocks progression. Fine visual/timing differences remain recorded incompatibilities for later validation. They must not be silently discarded or presented as correct. Replays and renderer checks are separate gates; an interpreter can run successfully while the frontend still rejects a visible picture.
 
 ## Data path
 
@@ -55,6 +64,8 @@ Large IPAs are published as private Release attachments, not Actions artifacts. 
 ## References
 
 - [Official WOLF command documentation](https://silversecond.com/WolfRPGEditor/Help/)
+- [Browser Woditor distribution and version history](https://frostyhowl.com/browser-woditor/)
+- [Official WOLF description of Browser Woditor](https://smokingwolf.github.io/tool_wolf_rpg_editor/help/06tools.html)
 - [Database name selection](https://silversecond.com/WolfRPGEditor/Help/04ev_db.html)
 - [Variable addressing](https://silversecond.com/WolfRPGEditor/Help/06valueget.html)
 - [System variables](https://silversecond.com/WolfRPGEditor/Help/06systemvalue.html)

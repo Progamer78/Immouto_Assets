@@ -458,6 +458,74 @@ void delayed_se_dispatch_survives_restore() {
     loaded.tick(); const auto audio = loaded.take_audio(); REQUIRE(audio.size() == 1); REQUIRE(audio.at(0).at("file") == "SE/test.ogg");
     loaded.tick(); REQUIRE(loaded.take_audio().empty());
 }
+void music_stop_preserves_kind_and_fade_duration() {
+    wolf::Runtime rt(project({cmd(140, {16776960, 100, 0, 0}), cmd(140, {16776976, 0, 0, 0})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); const auto audio = rt.take_audio();
+    REQUIRE(audio.size() == 2); REQUIRE(audio.at(0).at("operation") == "stop"); REQUIRE(audio.at(0).at("kind") == 0);
+    REQUIRE(audio.at(0).at("fade_ms") == 1666); REQUIRE(audio.at(1).at("kind") == 1); REQUIRE(audio.at(1).at("fade_ms") == 0);
+}
+void zero_sound_frequency_matches_windows_default() {
+    wolf::Runtime rt(project({cmd(140, {33554432, 10, 0, 0, 70, 0, 0}, 0, {"BGM/sparrows.mp3"})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); const auto audio = rt.take_audio();
+    REQUIRE(audio.size() == 1); REQUIRE(audio.at(0).at("tempo") == 100); REQUIRE(audio.at(0).at("volume") == 70);
+    REQUIRE(rt.number(9000095) == 70); REQUIRE(rt.number(9000096) == 100);
+}
+void numeric_condition_literal_rhs_can_look_like_a_variable() {
+    wolf::Runtime rt(project({cmd(111, {17, 2000001, 2000000, 18}), cmd(401, {1}), cmd(121, {2000002, 1, 0, 0}, 1),
+        cmd(420, {0}), cmd(121, {2000002, 2, 0, 0}, 1), cmd(499),
+        cmd(111, {17, 2000001, 2000000, 2}), cmd(401, {1}), cmd(121, {2000003, 1, 0, 0}, 1),
+        cmd(420, {0}), cmd(121, {2000003, 2, 0, 0}, 1), cmd(499)}));
+    rt.set_number(2000000, 9); rt.set_number(2000001, 2000000); rt.start_common(0); rt.tick();
+    REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000002) == 1); REQUIRE(rt.number(2000003) == 2);
+}
+void arithmetic_ranges_match_windows_endpoints_and_aliasing() {
+    wolf::Runtime rt(project({cmd(121, {2000001, 7, 0, 65536, 2}),
+        cmd(121, {2000010, 2000010, 0, 65792, 2}), cmd(121, {1600040, 0, 0, 65536, 2})}));
+    for (int i = 0; i < 6; ++i) rt.set_number(2000000 + i, 99);
+    for (int i = 0; i < 3; ++i) rt.set_number(2000010 + i, i + 2);
+    for (int i = 39; i <= 43; ++i) rt.set_number(1600000 + i, 77, {0});
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    for (int i = 0; i < 6; ++i) REQUIRE(rt.number(2000000 + i) == (i >= 1 && i <= 3 ? 7 : 99));
+    REQUIRE(rt.number(2000010) == 4); REQUIRE(rt.number(2000011) == 7); REQUIRE(rt.number(2000012) == 8);
+    for (int i = 39; i <= 43; ++i) REQUIRE(rt.number(1600000 + i, {0}) == (i >= 40 && i <= 42 ? 0 : 77));
+}
+void arithmetic_range_random_draws_match_repeated_assignments() {
+    wolf::Runtime ranged(project({cmd(121, {2000020, 0, 100, 90112, 3})}));
+    std::vector<Json> commands; for (int i = 0; i < 4; ++i) commands.push_back(cmd(121, {2000020 + i, 0, 100, 24576}));
+    wolf::Runtime single(project(commands)); ranged.start_common(0); single.start_common(0); ranged.tick(); single.tick();
+    REQUIRE(ranged.error().empty()); REQUIRE(single.error().empty());
+    for (int i = 0; i < 4; ++i) REQUIRE(ranged.number(2000020 + i) == single.number(2000020 + i));
+    REQUIRE(ranged.number(2000020) != ranged.number(2000021));
+}
+void numeric_common_range_preserves_strings_and_other_events() {
+    wolf::Runtime rt(project({cmd(121, {1600000, 0, 0, 65536, 90})}));
+    rt.set_text(1600005, "keep", {0}); rt.set_number(1600004, 5, {0}); rt.set_number(1600090, 7, {0}); rt.set_number(1600010, 9, {1});
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.text(1600005, {0}) == "keep");
+    REQUIRE(rt.number(1600004, {0}) == 0); REQUIRE(rt.number(1600090, {0}) == 0); REQUIRE(rt.number(1600010, {1}) == 9);
+}
+void picture_shake_matches_windows_samples_and_resume() {
+    auto p = project({cmd(150, {0, 3, 0, 1, 1, 1, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(290, {32, 0, 3, 3, 4, -2, 0}), cmd(290, {48, 20, 3, 3, 0, 10, 99999}), cmd(180, {1000})});
+    auto reset = p["common"]["events"][0]; reset["id"] = 1; reset["commands"] = Json::array({cmd(290, {48, 0, 3, 3, 0, 0, 0})});
+    p["common"]["events"].push_back(reset);
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    // Frame/offset pairs captured from Game.exe with a rendered frame marker.
+    const std::vector<std::pair<int, int>> samples{{0,1},{2,2},{18,10},{21,9},{23,8},{38,0},{45,-3},{59,-10},{60,-9},{65,-7},{79,0},{125,-3},{145,-7},{183,8},{205,-3},{233,-3}};
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot());
+    for (const auto& [frame, expected] : samples) {
+        const auto offset = wolf::picture_draw_offset(loaded.pictures().at("3"), frame + 1);
+        REQUIRE(offset.first == 4); REQUIRE(offset.second == expected - 2);
+    }
+    loaded.start_common(1); loaded.tick(); REQUIRE(loaded.error().empty());
+    REQUIRE(!loaded.pictures().at("3").contains("shake")); REQUIRE(wolf::picture_draw_offset(loaded.pictures().at("3"), loaded.frame()).second == -2);
+}
+void finite_picture_shake_returns_to_base_without_changing_queries() {
+    wolf::Runtime rt(project({cmd(150, {0, 3, 0, 1, 1, 1, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(290, {48, 2, 3, 3, 4, -6, 1}), cmd(180, {1}), cmd(124, {2000000, 16384, 3, 0}), cmd(124, {2000001, 16384, 3, 1})}));
+    rt.start_common(0); rt.tick(); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000000) == 20); REQUIRE(rt.number(2000001) == 30);
+    REQUIRE(wolf::picture_draw_offset(rt.pictures().at("3"), 2).first == 2); REQUIRE(wolf::picture_draw_offset(rt.pictures().at("3"), 2).second == -3);
+    REQUIRE(wolf::picture_draw_offset(rt.pictures().at("3"), 3).first == 0); REQUIRE(wolf::picture_draw_offset(rt.pictures().at("3"), 100).second == 0);
+}
 void choice_mouse_selects_clicked_row_and_rejects_outside_click() {
     const auto p = project({cmd(102, {18}, 0, {"first", "second"}), cmd(401, {2}), cmd(121, {2000000, 10, 0, 0}, 1),
         cmd(401, {3}), cmd(121, {2000000, 20, 0, 0}, 1), cmd(499)});
@@ -507,6 +575,12 @@ int main() {
         basic_and_mouse_input_permissions();
         automatic_basic_input_is_deferred_and_restored(); choice_mouse_selects_clicked_row_and_rejects_outside_click();
         delayed_se_dispatch_survives_restore();
-        std::cout << "39 native runtime tests passed\n"; return 0;
+        music_stop_preserves_kind_and_fade_duration();
+        zero_sound_frequency_matches_windows_default();
+        numeric_condition_literal_rhs_can_look_like_a_variable();
+        arithmetic_ranges_match_windows_endpoints_and_aliasing(); arithmetic_range_random_draws_match_repeated_assignments();
+        numeric_common_range_preserves_strings_and_other_events();
+        picture_shake_matches_windows_samples_and_resume(); finite_picture_shake_returns_to_base_without_changing_queries();
+        std::cout << "47 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

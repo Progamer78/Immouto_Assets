@@ -161,4 +161,5 @@ Json load_json(const std::string& filename);
 void atomic_save(const std::string& filename, const Json& state);
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame);
 int picture_pattern(const Json& picture, std::uint64_t frame);
+std::pair<std::int64_t, std::int64_t> picture_draw_offset(const Json& picture, std::uint64_t frame);
 }

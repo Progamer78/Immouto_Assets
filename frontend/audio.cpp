@@ -58,8 +58,15 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
     for (const auto& event : events) {
         const int kind = event.at("kind"), fade_ms = event.at("fade_ms");
         if (kind < 0 || kind > 2) throw std::runtime_error("Unsupported native audio kind");
-        if (event.at("operation") == "stop" && fade_ms == 0) {
-            voices.erase(std::remove_if(voices.begin(), voices.end(), [&](const auto& voice) { return voice->kind == kind; }), voices.end());
+        if (event.at("operation") == "stop") {
+            voices.erase(std::remove_if(voices.begin(), voices.end(), [&](const auto& voice) {
+                if (voice->kind != kind) return false;
+                if (fade_ms == 0) return true;
+                voice->retiring = true;
+                ma_sound_set_fade_in_milliseconds(&voice->sound, -1, 0, fade_ms);
+                ma_sound_set_stop_time_in_milliseconds(&voice->sound, ma_engine_get_time_in_milliseconds(&impl_->engine) + fade_ms);
+                return false;
+            }), voices.end());
             continue;
         }
         if (event.at("operation") != "play") throw std::runtime_error("Unsupported native audio event");

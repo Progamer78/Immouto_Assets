@@ -567,6 +567,7 @@ void Runtime::apply_picture_change(const Json& action) {
     if (show) {
         if (previous.contains("flicker")) target["flicker"] = previous.at("flicker");
         if (previous.contains("draw_shift")) target["draw_shift"] = previous.at("draw_shift");
+        if (previous.contains("shake")) target["shake"] = previous.at("shake");
         if (previous.contains("pattern_effect")) target["pattern_effect"] = previous.at("pattern_effect");
         if (action.at("same_zoom") == true && !previous.empty()) { target["zoom"] = previous.at("zoom"); target["zoom_y"] = previous.at("zoom_y"); }
         if (action.at("same_color") == true && !previous.empty()) for (const char* color : {"red", "green", "blue"}) target[color] = previous.value(color, 100);
@@ -671,12 +672,18 @@ void Runtime::picture_effect(const Json& cmd, Context c) {
     const int first = number(arg(cmd, 2), c), last = number(arg(cmd, 3), c);
     const Json color = Json::array({number(arg(cmd, 4), c), number(arg(cmd, 5), c), number(arg(cmd, 6), c)});
     if (type == 2 && color.at(2) != 0) fail("Unsupported picture-shift extra operand");
-    if ((type == 3 || type == 7) && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Nonzero picture shake/automatic zoom is not implemented");
+    if (type == 3 && color.at(2).get<int>() < 0) fail("Negative picture-shake repeat count is not implemented");
+    if (type == 7 && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Nonzero automatic picture zoom is not implemented");
     if (type >= 8 && (color.at(2) != 0 || (duration && (color.at(0).get<int>() < 1 || color.at(1).get<int>() < 1)))) fail("Unsupported automatic picture-pattern operands");
     for (auto& picture : pictures_) {
         const int id = picture.at("id");
         if (id < std::min(first, last) || id > std::max(first, last)) continue;
-        if (type == 3 || type == 7) { picture.erase(type == 3 ? "shake" : "automatic_zoom"); continue; }
+        if (type == 7) { picture.erase("automatic_zoom"); continue; }
+        if (type == 3) {
+            if (duration == 0 || color.at(2) == 0 || (color.at(0) == 0 && color.at(1) == 0)) picture.erase("shake");
+            else picture["shake"] = {{"start", frame_ + 1}, {"duration", duration}, {"x", color.at(0)}, {"y", color.at(1)}, {"count", color.at(2)}};
+            continue;
+        }
         if (type >= 8) {
             if (duration == 0) picture.erase("pattern_effect");
             else picture["pattern_effect"] = {{"type", type}, {"start", frame_}, {"interval", duration}, {"first", color.at(0)}, {"last", color.at(1)}};
@@ -810,6 +817,27 @@ std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame) {
     return result;
 }
 
+std::pair<std::int64_t, std::int64_t> picture_draw_offset(const Json& picture, std::uint64_t frame) {
+    std::pair<std::int64_t, std::int64_t> result{0, 0};
+    if (picture.contains("draw_shift")) result = {picture.at("draw_shift").at("x"), picture.at("draw_shift").at("y")};
+    if (!picture.contains("shake")) return result;
+    const auto& shake = picture.at("shake");
+    const auto start = shake.at("start").get<std::uint64_t>();
+    if (frame < start) return result;
+    const auto duration = shake.at("duration").get<std::uint64_t>();
+    // Reference samples include the initial two internal effect updates. Each
+    // repetition is one excursion and return; successive excursions alternate.
+    const auto age = frame - start + 2;
+    if (age >= duration * 2 * shake.at("count").get<std::uint64_t>()) return result;
+    const auto quarter = (age / duration) % 4, step = age % duration;
+    auto offset = [&](const char* field) {
+        const auto amplitude = shake.at(field).get<std::int64_t>();
+        const std::array<std::int64_t, 5> points{0, amplitude, 0, -amplitude, 0};
+        return points[quarter] + (points[quarter + 1] - points[quarter]) * static_cast<std::int64_t>(step) / static_cast<std::int64_t>(duration);
+    };
+    result.first += offset("x"); result.second += offset("y"); return result;
+}
+
 int picture_pattern(const Json& picture, std::uint64_t frame) {
     if (!picture.contains("pattern_effect")) return picture.at("pattern");
     const auto& effect = picture.at("pattern_effect");
@@ -836,8 +864,14 @@ void Runtime::execute(Run& run, const Json& cmd) {
     case 130: transfer(cmd, context); return;
     case 111: {
         std::vector<bool> conditions;
-        for (int i = 0, n = arg(cmd, 0) & 15; i < n; ++i)
-            conditions.push_back(compare(value(1 + 3 * i), value(2 + 3 * i), arg(cmd, 3 + 3 * i) & 255));
+        const int count = arg(cmd, 0) & 15;
+        if ((arg(cmd, 0) & ~31) || count == 0 || cmd.at("args").size() != static_cast<std::size_t>(1 + count * 3)) fail("Unsupported numeric-condition layout");
+        for (int i = 0; i < count; ++i) {
+            const int options = arg(cmd, 3 + 3 * i);
+            if (options & ~31) fail("Unsupported numeric-condition flags");
+            const int right = options & 16 ? arg(cmd, 2 + 3 * i) : value(2 + 3 * i);
+            conditions.push_back(compare(value(1 + 3 * i), right, options & 15));
+        }
         branch(f, indent, conditions); return;
     }
     case 112: {
@@ -870,6 +904,20 @@ void Runtime::execute(Run& run, const Json& cmd) {
     }
     case 121: {
         const int options = arg(cmd, 3);
+        if (options & 65536) {
+            if (cmd.at("args").size() != 5 || (options & ~0x1ff7f) || (options & 16)) fail("Unsupported arithmetic variable-range layout");
+            const int distance = arg(cmd, 4), first = arg(cmd, 0);
+            if (distance < 0 || distance > 65535 || static_cast<std::int64_t>(first) + distance > std::numeric_limits<int>::max())
+                fail("Unsupported arithmetic variable-range extent");
+            Json single = cmd;
+            single["args"] = Json::array({first, arg(cmd, 1), arg(cmd, 2), options & 65535});
+            // Each iteration reads operands again: an earlier destination may
+            // also be a source, and random ranges draw once per variable.
+            for (int offset = 0; offset <= distance; ++offset) {
+                single["args"][0] = first + offset; execute(run, single);
+            }
+            return;
+        }
         if (cmd.at("args").size() != 4 || (options & ~0xff7f)) fail("Variable range/unknown option flags are not implemented");
         auto operand = [&](int i, int literal, int indirect) {
             if (options & literal) {
@@ -927,17 +975,26 @@ void Runtime::execute(Run& run, const Json& cmd) {
     case 122: string_operation(cmd, context); return;
     case 140: {
         const int kind = (arg(cmd, 0) >> 4) & 15;
+        if (kind <= 1 && arg(cmd, 0) == (0x00ffff00 | (kind << 4))) {
+            if (cmd.at("args").size() != 4 || !cmd.at("strings").empty() || value(2) != 0 || value(3) != 0)
+                fail("Unsupported music-stop layout");
+            audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1},
+                {"fade_ms", std::max(0, value(1)) * 1000 / project_.at("game").at("fps").get<int>()}});
+            return;
+        }
         if (kind > 2 || arg(cmd, 0) != (0x02000000 | (kind << 4)) ||
             cmd.at("args").size() != (kind == 2 ? 6 : 7) || cmd.at("strings").size() != 1 || value(2) != 0)
             fail("Unsupported sound-command layout (filename playback only)");
-        if (value(5) <= 0) fail("Sound frequency must be positive");
+        if (value(5) < 0) fail("Negative sound frequency is not supported");
+        const int frequency = value(5) == 0 ? 100 : value(5);
         const Json event = {{"operation", "play"}, {"kind", kind}, {"file", expand(cmd.at("strings").at(0), context)},
-            {"channel", kind == 2 ? value(3) : 0}, {"volume", value(4)}, {"tempo", value(5)},
+            {"channel", kind == 2 ? value(3) : 0}, {"volume", value(4)}, {"tempo", frequency},
             {"start_ms", kind == 2 ? 0 : std::max(0, value(3))}, {"loop_ms", kind == 2 ? 0 : value(6)},
             {"fade_ms", kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_.at("game").at("fps").get<int>()}};
         const int delay = kind == 2 ? std::max(0, value(1)) : 0;
         if (delay) pending_audio_.push_back({{"start", frame_ + delay}, {"event", event}});
         else audio_.push_back(event);
+        if (kind < 2) { set_number(9000095 + kind * 2, value(4)); set_number(9000096 + kind * 2, frequency); }
         return;
     }
     case 123: {
