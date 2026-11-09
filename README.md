@@ -1,6 +1,6 @@
 # Monochrome native iOS port
 
-Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The complete game is not playable yet.** Native checks pass on Windows, Linux and macOS. The first ARM64 iOS compilation check also passed and produced a 555 KB unsigned IPA without game assets. See [PORT_STATUS.md](PORT_STATUS.md) for verified progress and the current startup blocker.
+Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The complete game is not playable yet.** Native title-runtime checks passed on Windows, Linux and macOS, and an ARM64 iOS compilation check produced a 901 KB unsigned IPA without game assets. Local development now reaches opening dialogue and choices. See [PORT_STATUS.md](PORT_STATUS.md) for verified progress and remaining blockers.
 
 The supplied game files remain in their original directory. Git excludes the original game, generated game data, private asset archives, build outputs and signing material.
 
@@ -25,7 +25,7 @@ python tools/prepare_game.py --stage
 build/windows-app/WolfPort.exe build/game
 ```
 
-The frontend now renders the opening prompt and main title menu from the original data. Recorded keyboard input selects New Game, which currently stops at the first map-transfer command. This is not yet a playable game. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
+The frontend renders the original title prompt, main menu, opening dialogue and initial choices. Recorded input selects New Game, performs its initial transfers, dismisses the notice and selects the language menu. A longer replay currently stops at an unsupported music-stop command. Map drawing, movement/collision and complete game save/load remain unfinished. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
 
 With an existing C++17 toolchain and CMake, the portable core can instead be built without SDL:
 
@@ -51,6 +51,8 @@ GitHub allows release attachments below 2 GiB each, which accommodates the suppl
 The source is connected to the private [Progamer78/Immouto_Assets repository](https://github.com/Progamer78/Immouto_Assets). The initial [native checks passed](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780). The game asset package has not been uploaded. Do not upload the whole original folder through Git, and do not commit the asset ZIP or signing files.
 
 The first [unsigned iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585937560) completed in 4 minutes 1 second, including setup, compilation, packaging and publication. Its [release](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-1-1) is a compilation-check artifact, not a playable game build. The downloaded IPA was checked for a valid ZIP, ARM64 executable, bundle identifier and iOS deployment target. Details are in [reports/ios_build_check.json](reports/ios_build_check.json).
+
+The expanded title-runtime [iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42618585767) passed in 4 minutes 12 seconds; compilation itself took 15 seconds. Its [901 KB unsigned IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-2-1) was downloaded and checked for ZIP integrity and ARM64 metadata. These timings exclude the game assets and signing, and do not validate the later dialogue changes or device gameplay.
 
 ## Fast development cycle
 

@@ -11,6 +11,8 @@
 #include <array>
 #include "resources.hpp"
 
+class TextRasterizer;
+
 namespace wolf {
 using Json = nlohmann::json;
 struct CrashBreadcrumb {
@@ -66,18 +68,23 @@ public:
     const Json& pictures() const { return pictures_; }
     const Json& characters() const { return characters_; }
     const Json& choice() const { return choice_; }
+    const Json& message_state() const { return message_state_; }
     const std::string& error() const { return error_; }
     const std::string& message() const { return message_; }
     std::uint64_t frame() const { return frame_; }
     const Json* current_map() const;
     bool quit_requested() const { return quit_; }
     Json take_audio();
+    Json choice_pictures() const;
 
 private:
     Json project_, databases_, pictures_ = Json::object(), audio_ = Json::array();
     Json transition_ = {{"id", -1}, {"frames", 0}, {"wait", false}};
     Json pending_picture_erases_ = Json::array();
+    Json pending_picture_changes_ = Json::array();
+    Json pending_audio_ = Json::array();
     Json choice_ = Json::object();
+    Json message_state_ = Json::object();
     std::uint64_t choice_clear_after_ = 0;
     Json characters_ = Json::object();
     Json party_ = {{"images", {"", "", "", "", "", ""}}, {"visible", true}};
@@ -89,15 +96,21 @@ private:
     std::mt19937 random_{0};
     std::map<int, std::uint64_t> executed_;
     std::uint64_t frame_ = 0;
+    std::uint64_t play_time_ticks_ = 0;
     int map_ = 0, hero_x_ = 0, hero_y_ = 0;
     bool quit_ = false;
     Input input_;
+    Input raw_input_;
     Input previous_input_;
+    std::array<int, 7> input_permissions_{};
+    bool mouse_enabled_ = true;
+    int pending_auto_input_ = 0;
     std::string error_, message_;
     std::string project_id_;
     std::string save_root_;
     std::string asset_root_;
     std::shared_ptr<Resources> resources_;
+    std::shared_ptr<TextRasterizer> text_rasterizer_;
     std::map<std::string, Json> save_slots_;
     std::set<std::string> dirty_saves_;
     Context error_context_;
@@ -106,6 +119,7 @@ private:
     std::uint64_t key(int ref, Context context) const;
     Json& cell(int ref);
     const Json& common(int id) const;
+    const Json* map_data(int id) const;
     const Json& commands(Context context) const;
     bool compare(int left, int right, int operation) const;
     bool page_active(const Json& page, Context context);
@@ -114,11 +128,21 @@ private:
     void execute(Run& run, const Json& command);
     void branch(Frame& frame, int indent, const std::vector<bool>& conditions);
     void picture(const Json& command, Context context);
+    void move_picture(const Json& command, Context context);
+    void apply_picture_change(const Json& action);
     void advance_pictures();
     void erase_picture(int id, int duration);
+    void erase_picture_range(int first, int last, int duration);
     void picture_effect(const Json& command, Context context);
+    void picture_query(const Json& command, Context context);
     void show_choice(Run& run, const Json& command);
+    void prepare_choice_layout();
     void advance_choice();
+    void show_message(Run& run, const Json& command);
+    void advance_message();
+    void apply_input_permissions();
+    void transfer(const Json& command, Context context);
+    void choice_sound(int system_variable);
     void string_operation(const Json& command, Context context);
     void call(Run& run, const Json& command);
     std::string character_key(int target, Context context);
@@ -136,4 +160,5 @@ private:
 Json load_json(const std::string& filename);
 void atomic_save(const std::string& filename, const Json& state);
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame);
+int picture_pattern(const Json& picture, std::uint64_t frame);
 }

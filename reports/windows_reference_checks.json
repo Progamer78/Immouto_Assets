@@ -129,5 +129,128 @@
     "Data/MapData/SampleMapA_1.mps": "4354e920423b2708af8d260209ededa757c2c84db2ca0d818622fe1b5790e454",
     "Data/MapData/SampleMapB.mps": "53bc88e60f21a238a4621aa80b2855439e2f2a22b3f2fa1184397bba0f94c3f1",
     "Data/MapData/TitleMap.mps": "0fc65032e31e7c6dfa9a822ced81a4c8081320fd283b63368642afd86b3774b1"
+  },
+  "picture_ranges": {
+    "verified": true,
+    "method": "Isolated Game.exe fixture with pictures 1..8 and -1..-3; erase endpoints 3..5 and -1..-2.",
+    "remaining_ids": [
+      1,
+      2,
+      6,
+      7,
+      8,
+      -3
+    ],
+    "range_is_inclusive_endpoints": true,
+    "reversed_endpoints_supported": true
+  },
+  "picture_movement": {
+    "range_x": {
+      "observed": 35,
+      "native": 35
+    },
+    "same_zoom": {
+      "observed": 125,
+      "native": 125
+    },
+    "delayed_relative_only": {
+      "observed": 14,
+      "native": 14
+    },
+    "delayed_relative_after_reposition": {
+      "observed": 24,
+      "native": 24
+    },
+    "known_mismatch_delayed_relative_overlapping_range": {
+      "observed": 39,
+      "native": 29,
+      "status": "unresolved; not a full timing/parity claim"
+    }
+  },
+  "missing_picture_queries": {
+    "verified": true,
+    "fields": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "results": [
+      -1,
+      -1,
+      -1,
+      -1,
+      -1,
+      -1,
+      -1,
+      -1,
+      -1,
+      0,
+      -1,
+      -1,
+      -1
+    ],
+    "method": "Queried absent ID 999 with the same supplied Game.exe. Field 9 is existence; every other tested field returns -1."
+  },
+  "delayed_picture_show": {
+    "verified": true,
+    "before_display": {
+      "exists": 1,
+      "text_done": -1,
+      "x": 0,
+      "opacity": 0
+    },
+    "effect_before_display_retained": true,
+    "method": "Delayed text show with draw shift (+50,+20) immediately afterward. Reference displayed the text at (100,170) after its delay."
+  },
+  "choice_defaults": {
+    "verified": true,
+    "window_enabled": 1,
+    "margin_x": 14,
+    "margin_y": 14,
+    "initial_repeat_frames": 16,
+    "repeat_frames": 5,
+    "configuration": "Choice fixture rerun with the archived Game.dat and SysDatabase files copied into the isolated loose-data fixture. No original data modified.",
+    "reference_image_sha256": "bcfadb2ed742cfd60249ebea8bad4983a63922472ab51ea805322c8d164ee9a1"
+  },
+  "text_widths": {
+    "verified": true,
+    "font": "07やさしさゴシックボールド",
+    "size": 20,
+    "cases": [
+      "TAB",
+      "space",
+      "X<TAB>Y",
+      "X<4 spaces>Y",
+      "X<8 spaces>Y",
+      "XY"
+    ],
+    "reference": [
+      20,
+      10,
+      46,
+      66,
+      106,
+      26
+    ],
+    "native": [
+      20,
+      10,
+      46,
+      66,
+      106,
+      26
+    ],
+    "limits": "Six width cases, not complete font hinting/metrics parity.",
+    "reference_image_sha256": "c9782b6fdb55e5ad511b6fb7d6c7c2169fd28f3ad8e4eec02e3acbddf0cdaa7f"
   }
 }

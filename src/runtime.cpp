@@ -1,4 +1,5 @@
 #include "runtime.hpp"
+#include "text.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <regex>
 
 namespace wolf {
 CrashBreadcrumb crash_breadcrumb;
@@ -34,7 +36,7 @@ Runtime::Runtime(Json project, std::string save_root, std::string asset_root) : 
     std::ostringstream identity; identity << std::hex << fingerprint; project_id_ = identity.str();
     databases_ = project_.at("databases");
     const auto& start = databases_.at("system").at("types").at(7).at("rows").at(0);
-    map_ = start.at(0); hero_x_ = start.at(1); hero_y_ = start.at(2);
+    map_ = start.at(0); hero_x_ = start.at(1).get<int>() * 2; hero_y_ = start.at(2).get<int>() * 2;
     if (!current_map()) fail("Initial map is absent from the converted data");
     // Engine-owned values documented in WOLF's system-variable list.
     numbers_[9000115] = 319; // This compatibility target is the supplied 3.191 runtime.
@@ -46,6 +48,8 @@ Runtime::Runtime(Json project, std::string save_root, std::string asset_root) : 
         project_.at("game").at("width") == 800 && project_.at("game").at("height") == 600 ? 2 : -1;
     for (int ref = 9000100; ref <= 9000102; ++ref) numbers_[ref] = 100;
     numbers_[9000020] = -1;
+    numbers_[9000014] = 1; numbers_[9000015] = 16; numbers_[9000016] = 5;
+    numbers_[9000026] = numbers_[9000027] = project_.at("game").contains("flags") ? project_.at("game").at("flags").at(12).get<int>() : 14;
 }
 
 void Runtime::fail(const std::string& message) const { throw std::runtime_error(message); }
@@ -59,9 +63,13 @@ const Json& Runtime::common(int id) const {
 }
 
 const Json* Runtime::current_map() const {
+    return map_data(map_);
+}
+
+const Json* Runtime::map_data(int id) const {
     const auto& rows = databases_.at("system").at("types").at(0).at("rows");
-    if (map_ < 0 || static_cast<std::size_t>(map_) >= rows.size()) return nullptr;
-    const std::string path = rows.at(map_).at(0);
+    if (id < 0 || static_cast<std::size_t>(id) >= rows.size()) return nullptr;
+    const std::string path = rows.at(id).at(0);
     for (const auto& candidate : project_.at("maps")) if (candidate.at("file") == path) return &candidate;
     return nullptr;
 }
@@ -116,11 +124,15 @@ std::int32_t Runtime::number(int ref, Context c) {
         return std::uniform_int_distribution<int>(0, ref - 8000000)(random_);
     if (ref == 9000071) return input_.mouse_x;
     if (ref == 9000072) return input_.mouse_y;
+    if (ref == 9000029) return static_cast<std::int32_t>(play_time_ticks_ / project_.at("game").at("fps").get<int>());
+    if (ref == 9000030) return static_cast<std::int32_t>((play_time_ticks_ % project_.at("game").at("fps").get<int>()) * 1000 / project_.at("game").at("fps").get<int>());
+    if (ref == 9000013) return std::any_of(runs_.begin(), runs_.end(), [](const Run& run) { return run.blocking && !run.stack.empty(); });
     const auto position = numbers_.find(key(ref, c));
     return position == numbers_.end() ? 0 : position->second;
 }
 
 void Runtime::set_number(int ref, std::int32_t value, Context c) {
+    if (ref == 9000029) { play_time_ticks_ = static_cast<std::uint64_t>(std::max(0, value)) * project_.at("game").at("fps").get<int>(); return; }
     if (ref >= 1000000000) {
         auto& field = cell(ref);
         if (!field.is_number_integer()) fail("Numeric write to a string database field");
@@ -146,29 +158,49 @@ void Runtime::set_text(int ref, std::string value, Context c) {
 }
 
 std::string Runtime::expand(std::string value, Context c) {
-    // Expand variable substitutions; drawing controls remain for the text renderer.
+    // Substitute all leaf references in a pass so the limit bounds nesting,
+    // rather than the number of independent variables in a long message.
+    static const std::regex reference(R"(\\(v[0-9]?|s|cself|self|sys|syss|udb|cdb|sdb)\[(-?[0-9]+(?::-?[0-9]+)*)\])", std::regex::icase);
     for (int pass = 0; pass < 16; ++pass) {
         bool changed = false;
-        for (std::size_t i = 0; i < value.size(); ++i) {
-            if (value[i] != '\\') continue;
-            const auto bracket = value.find('[', i + 1);
-            if (bracket == std::string::npos || bracket - i > 8) continue;
-            std::string tag = value.substr(i + 1, bracket - i - 1);
+        std::string output; std::size_t previous = 0;
+        for (std::sregex_iterator it(value.begin(), value.end(), reference), end; it != end; ++it) {
+            const auto& match = *it; const auto start = static_cast<std::size_t>(match.position());
+            output.append(value, previous, start - previous);
+            previous = start + match.length();
+            std::size_t escapes = 0;
+            for (auto before = start; before > 0 && value[before - 1] == '\\'; --before) ++escapes;
+            if (escapes % 2) { output += match.str(); continue; }
+            std::string tag = match[1];
             std::transform(tag.begin(), tag.end(), tag.begin(), [](unsigned char ch) { return std::tolower(ch); });
-            if (tag != "v" && tag != "s" && tag != "cself" && tag != "self" && tag != "sys") continue;
-            const auto end = value.find(']', bracket);
-            if (end == std::string::npos) fail("Unclosed variable substitution");
-            const auto index_text = value.substr(bracket + 1, end - bracket - 1);
-            if (index_text.empty() || index_text.find_first_not_of("0123456789") != std::string::npos) continue;
-            const int index = std::stoi(index_text);
-            int ref = tag == "v" ? 2000000 + index : tag == "s" ? 3000000 + index :
-                tag == "sys" ? 9000000 + index : tag == "self" ? 1100000 + index : 1600000 + index;
-            const bool is_string = tag == "s" || (tag == "cself" && index >= 5 && index <= 9);
-            auto replacement = is_string ? text(ref, c) : std::to_string(number(ref, c));
-            value.replace(i, end - i + 1, replacement);
-            changed = true; break;
+            std::vector<int> indices; std::istringstream arguments(match[2].str()); std::string part;
+            while (std::getline(arguments, part, ':')) indices.push_back(std::stoi(part));
+            if (std::any_of(indices.begin(), indices.end(), [](int index) { return index < 0 || index > 99999; })) fail("Invalid substitution index");
+            std::string replacement;
+            if (tag == "udb" || tag == "cdb" || tag == "sdb") {
+                if (indices.size() > 3) fail("Invalid database substitution");
+                const auto& type = databases_.at(tag == "udb" ? "user" : tag == "cdb" ? "mutable" : "system").at("types").at(indices.at(0));
+                if (indices.size() == 1) replacement = type.at("schema").at("name");
+                else if (indices.size() == 2) replacement = type.at("schema").at("names").at(indices.at(1));
+                else {
+                    const auto& field = type.at("rows").at(indices.at(1)).at(indices.at(2));
+                    replacement = field.is_string() ? field.get<std::string>() : std::to_string(field.get<int>());
+                }
+            } else {
+                if (indices.size() != 1) fail("Invalid variable substitution");
+                const int index = indices.at(0);
+                const int bank = tag.size() == 2 && tag.front() == 'v' ? tag[1] - '0' : 0;
+                const int ref = tag.front() == 'v' ? 2000000 + bank * 100000 + index : tag == "s" ? 3000000 + index :
+                    tag == "sys" ? 9000000 + index : tag == "syss" ? 9900000 + index : tag == "self" ? 1100000 + index : 1600000 + index;
+                const bool string = tag == "s" || tag == "syss" || (tag == "cself" && index >= 5 && index <= 9);
+                replacement = string ? text(ref, c) : std::to_string(number(ref, c));
+            }
+            output += replacement; changed = true;
+            if (output.size() > 16 * 1024 * 1024) fail("Expanded game text is too large");
         }
+        output.append(value, previous, value.size() - previous);
         if (!changed) return value;
+        value = std::move(output);
     }
     fail("Variable substitution recursion limit"); return {};
 }
@@ -269,8 +301,17 @@ void Runtime::branch(Frame& f, int indent, const std::vector<bool>& conditions) 
 
 void Runtime::tick(const Input& input) {
     if (!error_.empty() || quit_) return;
-    input_ = input;
+    raw_input_ = input;
+    const std::array<bool Input::*, 7> auto_buttons{&Input::confirm, &Input::cancel, &Input::sub, &Input::down, &Input::left, &Input::right, &Input::up};
+    const std::array<int, 7> auto_bits{1, 2, 4, 16, 32, 64, 128};
+    for (std::size_t i = 0; i < auto_buttons.size(); ++i) raw_input_.*auto_buttons[i] |= (pending_auto_input_ & auto_bits[i]) != 0;
+    pending_auto_input_ = 0;
+    apply_input_permissions();
     try {
+        for (auto it = pending_audio_.begin(); it != pending_audio_.end();) {
+            if (it->at("start").get<std::uint64_t>() <= frame_) { audio_.push_back(it->at("event")); it = pending_audio_.erase(it); }
+            else ++it;
+        }
         if (choice_clear_after_ && frame_ >= choice_clear_after_) { set_number(9000020, -1); choice_clear_after_ = 0; }
         advance_pictures();
         for (auto& route : routes_) advance_route(route);
@@ -291,12 +332,28 @@ void Runtime::tick(const Input& input) {
         for (auto& run : runs_) if (run.wake <= frame_ && !route_pending(run)) {
             run.waiting_route = 0; run.waiting_all_routes = false; advance(run);
         }
-        runs_.erase(std::remove_if(runs_.begin(), runs_.end(), [](const Run& r) { return r.stack.empty(); }), runs_.end());
+        runs_.erase(std::remove_if(runs_.begin(), runs_.end(), [&](const Run& r) {
+            return r.stack.empty() || (!r.blocking && r.stack.front().context.common < 0 && r.stack.front().context.map != map_);
+        }), runs_.end());
         advance_choice();
+        advance_message();
         previous_input_ = input_;
         ++frame_;
+        numbers_[9000028] = (static_cast<std::int64_t>(number(9000028)) + 1 + 10000000) % 10000000;
+        ++play_time_ticks_;
     } catch (const std::exception& error) { error_ = error.what(); }
     try { flush_saves(); } catch (const std::exception& error) { error_ = error.what(); }
+}
+
+void Runtime::apply_input_permissions() {
+    input_ = raw_input_;
+    const std::array<bool Input::*, 7> buttons{&Input::confirm, &Input::cancel, &Input::sub, &Input::down, &Input::left, &Input::right, &Input::up};
+    for (std::size_t i = 0; i < buttons.size(); ++i) if (input_permissions_[i] == 2) input_.*buttons[i] = false;
+    if (!mouse_enabled_) {
+        input_.mouse_left = input_.mouse_right = input_.mouse_middle = false;
+        input_.mouse_left_new = input_.mouse_right_new = false; input_.wheel = 0;
+        input_.mouse_x = previous_input_.mouse_x; input_.mouse_y = previous_input_.mouse_y;
+    }
 }
 
 void Runtime::advance(Run& run) {
@@ -322,7 +379,6 @@ void Runtime::advance(Run& run) {
         ++executed_[cmd.at("code").get<int>()];
         execute(run, cmd);
         if (run.wake > frame_ || route_pending(run)) return;
-        if (!message_.empty()) return;
     }
     if (!run.stack.empty()) fail("Event exceeded 20,000 commands without yielding; execution stopped");
 }
@@ -373,45 +429,168 @@ void Runtime::call(Run& run, const Json& cmd) {
 void Runtime::picture(const Json& cmd, Context c) {
     const int flags = arg(cmd, 0), operation = flags & 15;
     const int id = number(arg(cmd, 1), c);
-    const auto name = std::to_string(id);
+    if (operation == 1) { move_picture(cmd, c); return; }
+    if (operation == 3) {
+        const bool range = (flags & 0x01000000) != 0;
+        if (cmd.at("args").size() != (range ? 3 : 2) || (flags & ~0x07ffffff)) fail("Unsupported picture delay-reset layout");
+        const int last = range ? number(arg(cmd, 2), c) : id;
+        const int first_id = std::min(id, last), last_id = std::max(id, last);
+        Json retained = Json::array();
+        for (const auto& pending : pending_picture_erases_) {
+            const int low = std::min(pending.at("id").get<int>(), pending.value("last", pending.at("id").get<int>()));
+            const int high = std::max(pending.at("id").get<int>(), pending.value("last", pending.at("id").get<int>()));
+            if (high < first_id || low > last_id) retained.push_back(pending);
+            else {
+                if (low < first_id) { auto left = pending; left["id"] = low; left["last"] = first_id - 1; retained.push_back(std::move(left)); }
+                if (high > last_id) { auto right = pending; right["id"] = last_id + 1; right["last"] = high; retained.push_back(std::move(right)); }
+            }
+        }
+        pending_picture_erases_ = std::move(retained);
+        retained = Json::array();
+        for (const auto& pending : pending_picture_changes_) {
+            const auto& action = pending.at("action");
+            const int low = std::min(action.at("id").get<int>(), action.value("last", action.at("id").get<int>()));
+            const int high = std::max(action.at("id").get<int>(), action.value("last", action.at("id").get<int>()));
+            if (high < first_id || low > last_id) retained.push_back(pending);
+            else {
+                if (low < first_id) { auto left = pending; left["action"]["id"] = low; left["action"]["last"] = first_id - 1; retained.push_back(std::move(left)); }
+                if (high > last_id) { auto right = pending; right["action"]["id"] = last_id + 1; right["action"]["last"] = high; retained.push_back(std::move(right)); }
+            }
+        }
+        pending_picture_changes_ = std::move(retained);
+        return;
+    }
     if (operation == 2) {
-        if (cmd.at("args").size() < 3 || cmd.at("args").size() > 4 || (flags & 0x0fff0000))
+        const bool range = (flags & 0x01000000) != 0;
+        if (cmd.at("args").size() < 3 || cmd.at("args").size() > (range ? 6 : 4) ||
+            (range && (cmd.at("args").size() != 6 || arg(cmd, 4) != 0)) || (flags & ~0x07ffffff))
             fail("Unsupported picture erase range/options");
         const int duration = std::max(0, number(arg(cmd, 2), c));
-        const int delay = cmd.at("args").size() == 4 ? std::max(0, number(arg(cmd, 3), c)) : 0;
-        if (delay) pending_picture_erases_.push_back({{"id", id}, {"duration", duration}, {"start", frame_ + delay}});
-        else erase_picture(id, duration);
+        const int delay = cmd.at("args").size() >= 4 ? std::max(0, number(arg(cmd, 3), c)) : 0;
+        const int last = range ? number(arg(cmd, 5), c) : id;
+        if (delay) pending_picture_erases_.push_back({{"id", id}, {"last", last}, {"duration", duration}, {"start", frame_ + delay}});
+        else erase_picture_range(id, last, duration);
         return;
     }
     if (operation != 0) fail("Picture movement and interpolation are not implemented yet");
     const int kind = (flags >> 4) & 15;
     const bool variable_file = kind == 1 || kind == 4;
-    if ((flags & 0x0fff0000) || kind > 4 || cmd.at("args").size() != (variable_file ? 12 : 11))
+    const auto count = cmd.at("args").size();
+    const int zoom_mode = (flags >> 20) & 15;
+    if ((flags & ~0x00f0ffff) || (zoom_mode != 0 && zoom_mode != 3 && zoom_mode != 4) || kind > 4 ||
+        (count != (variable_file ? 12u : 11u) && count != 13 && count != 14 && count != 15 && count != 18 && count != 19) ||
+        (count >= 15 && arg(cmd, 14) != 0) || (zoom_mode == 3 && count != 19))
         fail("Unsupported picture transform layout");
     const int duration = std::max(0, number(arg(cmd, 2), c));
     const auto content = variable_file ? text(arg(cmd, 11), c) : cmd.at("strings").at(0).get<std::string>();
-    const Json previous = pictures_.contains(name) ? pictures_.at(name) : Json::object();
-    pictures_[name] = {{"id", id}, {"kind", kind}, {"content", expand(content, c)},
-        {"div_x", arg(cmd, 3)}, {"div_y", arg(cmd, 4)}, {"pattern", number(arg(cmd, 5), c)},
+    Json record = {{"id", id}, {"kind", kind}, {"content", expand(content, c)},
+        {"div_x", number(arg(cmd, 3), c)}, {"div_y", number(arg(cmd, 4), c)}, {"pattern", number(arg(cmd, 5), c)},
         {"opacity", number(arg(cmd, 6), c)}, {"x", number(arg(cmd, 7), c)}, {"y", number(arg(cmd, 8), c)},
         {"zoom", number(arg(cmd, 9), c)}, {"angle", number(arg(cmd, 10), c)},
         {"anchor", (flags >> 12) & 15}, {"blend", (flags >> 8) & 15}};
-    auto& picture = pictures_.at(name);
+    record["zoom_y"] = zoom_mode == 3 ? number(arg(cmd, 18), c) : record.at("zoom").get<int>();
+    const int color_mode = count >= 13 ? static_cast<unsigned int>(arg(cmd, 12)) >> 24 : 0;
+    if ((count >= 13 && (arg(cmd, 12) & 0xffffff)) || color_mode > 2 || (color_mode == 2 && count < 18)) fail("Unsupported picture color layout");
+    for (int i = 0; i < 3; ++i) record[std::array<const char*, 3>{"red", "green", "blue"}[i]] = color_mode == 2 ? number(arg(cmd, 15 + i), c) : 100;
     if (kind == 2) {
-        picture["text_style"] = {{"size", number(9000008)}, {"shadow", number(9000021)},
-            {"speed", number(9000011)}, {"antialias", project_.at("game").value("flags", Json::array()).size() > 14 ?
+        record["text_style"] = {{"size", number(9000008)}, {"shadow", number(9000021)},
+            {"speed", 0}, {"antialias", project_.at("game").value("flags", Json::array()).size() > 14 ?
                 project_.at("game").at("flags").at(14).get<int>() : 0}};
+        record["text_reveal"] = {{"times", text_reveal_times(record.at("content"), number(9000011))}};
     }
-    if (previous.contains("flicker")) picture["flicker"] = previous.at("flicker");
+    const Json action = {{"id", id}, {"operation", 0}, {"duration", duration}, {"values", record},
+        {"same_zoom", zoom_mode == 4}, {"same_color", color_mode == 1}};
+    const int delay = count >= 14 ? std::max(0, number(arg(cmd, 13), c)) : 0;
+    if (delay) {
+        // Game.exe allocates an empty picture immediately. Queries see it and
+        // effects attach to it before its delayed image/text becomes visible.
+        const auto name = std::to_string(id);
+        if (!pictures_.contains(name)) pictures_[name] = {{"id", id}, {"kind", -1}, {"content", ""},
+            {"div_x", 1}, {"div_y", 1}, {"pattern", 1}, {"opacity", 0}, {"x", 0}, {"y", 0},
+            {"zoom", 100}, {"zoom_y", 100}, {"angle", 0}, {"anchor", 0}, {"blend", 0}, {"red", 100}, {"green", 100}, {"blue", 100}};
+        pending_picture_changes_.push_back({{"start", frame_ + delay}, {"action", action}});
+    } else apply_picture_change(action);
+}
+
+void Runtime::move_picture(const Json& cmd, Context context) {
+    const int id = number(arg(cmd, 1), context);
+    const int flags = arg(cmd, 0);
+    const auto count = cmd.at("args").size();
+    const int zoom_mode = (flags >> 20) & 15;
+    const bool range = (flags & 0x01000000) != 0;
+    if ((flags & ~0x01f1ffff) || (zoom_mode != 0 && zoom_mode != 3 && zoom_mode != 4) ||
+        (count != 11 && count != 13 && count != 14 && count != 15 && count != 18 && count != 19) ||
+        (count >= 13 && arg(cmd, 11) != 0) || (range && count < 15) ||
+        (!range && count >= 15 && arg(cmd, 14) != 0) || (zoom_mode == 3 && count != 19))
+        fail("Unsupported picture movement layout");
+    Json values = Json::object();
+    for (const auto& [field, index] : std::vector<std::pair<std::string, int>>{{"pattern", 5}, {"opacity", 6}, {"x", 7}, {"y", 8}, {"zoom", 9}, {"angle", 10}}) {
+        if (field == "zoom" && zoom_mode == 4) continue;
+        const int value = number(arg(cmd, index), context);
+        if (value == -1000000) continue;
+        values[field] = value;
+    }
+    if (zoom_mode == 3) values["zoom_y"] = number(arg(cmd, 18), context);
+    else if (values.contains("zoom")) values["zoom_y"] = values.at("zoom");
+    const int color_mode = count >= 13 ? static_cast<unsigned int>(arg(cmd, 12)) >> 24 : 1;
+    if ((count >= 13 && (arg(cmd, 12) & 0xffffff)) || color_mode > 2 || (color_mode == 2 && count < 18)) fail("Unsupported picture movement color layout");
+    if (color_mode != 1) for (int i = 0; i < 3; ++i) values[std::array<const char*, 3>{"red", "green", "blue"}[i]] = color_mode == 2 ? number(arg(cmd, 15 + i), context) : 100;
+    const int anchor = (flags >> 12) & 15, blend = (flags >> 8) & 15;
+    if (anchor != 15) values["anchor"] = anchor;
+    if (blend != 15) values["blend"] = blend;
+    const int duration = std::max(0, number(arg(cmd, 2), context));
+    Json action = {{"id", id}, {"operation", 1}, {"duration", duration}, {"values", values}, {"relative", (flags & 65536) != 0}};
+    if (range) action["last"] = number(arg(cmd, 14), context);
+    const int delay = count >= 14 ? std::max(0, number(arg(cmd, 13), context)) : 0;
+    if (delay) pending_picture_changes_.push_back({{"start", frame_ + delay}, {"action", action}});
+    else apply_picture_change(action);
+}
+
+void Runtime::apply_picture_change(const Json& action) {
+    if (action.contains("last")) {
+        const int first = action.at("id"), last = action.at("last");
+        std::vector<int> selected;
+        for (const auto& picture : pictures_) {
+            const int id = picture.at("id");
+            if (id >= std::min(first, last) && id <= std::max(first, last)) selected.push_back(id);
+        }
+        auto single = action; single.erase("last");
+        for (int id : selected) { single["id"] = id; apply_picture_change(single); }
+        return;
+    }
+    const auto id = std::to_string(action.at("id").get<int>());
+    const bool show = action.at("operation") == 0;
+    if (!show && !pictures_.contains(id)) return;
+    const Json previous = pictures_.contains(id) ? pictures_.at(id) : Json::object();
+    auto target = show ? action.at("values") : previous;
+    target.erase("tween"); target.erase("fade_erase");
+    if (show) {
+        if (previous.contains("flicker")) target["flicker"] = previous.at("flicker");
+        if (previous.contains("draw_shift")) target["draw_shift"] = previous.at("draw_shift");
+        if (previous.contains("pattern_effect")) target["pattern_effect"] = previous.at("pattern_effect");
+        if (action.at("same_zoom") == true && !previous.empty()) { target["zoom"] = previous.at("zoom"); target["zoom_y"] = previous.at("zoom_y"); }
+        if (action.at("same_color") == true && !previous.empty()) for (const char* color : {"red", "green", "blue"}) target[color] = previous.value(color, 100);
+        if (target.contains("text_reveal")) {
+            target["text_reveal"]["start"] = frame_;
+            int visible = 0;
+            for (const auto& time : target.at("text_reveal").at("times")) { if (time.get<double>() > 0) break; ++visible; }
+            target["text_style"]["visible_chars"] = visible;
+        }
+    } else for (const auto& [field, value] : action.at("values").items()) {
+        if (field == "pattern" && target.at("kind").get<int>() >= 2) continue;
+        target[field] = action.at("relative") == true && (field == "x" || field == "y") ? Json(previous.at(field).get<int>() + value.get<int>()) : value;
+    }
+    const int duration = action.at("duration");
     if (duration) {
         Json from = Json::object(), to = Json::object();
-        for (const char* field : {"opacity", "x", "y", "zoom", "angle"}) {
-            to[field] = picture.at(field);
-            from[field] = previous.contains(field) ? previous.at(field) : std::string(field) == "opacity" ? Json(0) : picture.at(field);
-            picture[field] = from.at(field);
+        for (const char* field : {"opacity", "x", "y", "zoom", "zoom_y", "angle", "red", "green", "blue"}) {
+            to[field] = target.at(field);
+            from[field] = previous.contains(field) ? previous.at(field) : std::string(field) == "opacity" ? Json(0) : target.at(field);
+            target[field] = from.at(field);
         }
-        picture["tween"] = {{"start", frame_}, {"duration", duration}, {"from", from}, {"to", to}};
+        target["tween"] = {{"start", frame_}, {"duration", duration}, {"from", from}, {"to", to}};
     }
+    pictures_[id] = std::move(target);
 }
 
 void Runtime::erase_picture(int id, int duration) {
@@ -422,14 +601,45 @@ void Runtime::erase_picture(int id, int duration) {
     picture["fade_erase"] = {{"start", frame_}, {"duration", duration}, {"opacity", picture.at("opacity")}};
 }
 
+void Runtime::erase_picture_range(int first, int last, int duration) {
+    std::vector<int> selected;
+    for (const auto& picture : pictures_) {
+        const int id = picture.at("id");
+        if (id >= std::min(first, last) && id <= std::max(first, last)) selected.push_back(id);
+    }
+    for (int id : selected) erase_picture(id, duration);
+}
+
 void Runtime::advance_pictures() {
+    for (auto it = pending_picture_changes_.begin(); it != pending_picture_changes_.end();) {
+        if (it->at("start").get<std::uint64_t>() <= frame_) {
+            apply_picture_change(it->at("action")); it = pending_picture_changes_.erase(it);
+        } else ++it;
+    }
     for (auto it = pending_picture_erases_.begin(); it != pending_picture_erases_.end();) {
         if (it->at("start").get<std::uint64_t>() <= frame_) {
-            erase_picture(it->at("id"), it->at("duration")); it = pending_picture_erases_.erase(it);
+            erase_picture_range(it->at("id"), it->value("last", it->at("id").get<int>()), it->at("duration"));
+            it = pending_picture_erases_.erase(it);
         } else ++it;
     }
     for (auto it = pictures_.begin(); it != pictures_.end();) {
         auto& picture = it.value();
+        if (picture.contains("draw_shift") && picture.at("draw_shift").contains("tween")) {
+            auto& shift = picture["draw_shift"]; const auto& tween = shift.at("tween");
+            const auto age = std::min(frame_ - tween.at("start").get<std::uint64_t>(), tween.at("duration").get<std::uint64_t>());
+            for (const char* field : {"x", "y"}) {
+                const auto from = tween.at("from").at(field).get<std::int64_t>();
+                shift[field] = from + (tween.at("to").at(field).get<std::int64_t>() - from) * static_cast<std::int64_t>(age) / tween.at("duration").get<std::int64_t>();
+            }
+            if (age == tween.at("duration")) shift.erase("tween");
+        }
+        if (picture.contains("text_reveal")) {
+            const auto& reveal = picture.at("text_reveal");
+            const double age = static_cast<double>(frame_ - reveal.at("start").get<std::uint64_t>()) / project_.at("game").at("fps").get<int>();
+            int visible = 0;
+            for (const auto& time : reveal.at("times")) { if (time.get<double>() > age + 1e-9) break; ++visible; }
+            picture["text_style"]["visible_chars"] = visible;
+        }
         if (picture.contains("tween")) {
             const auto& tween = picture.at("tween");
             const auto start = tween.at("start").get<std::uint64_t>();
@@ -454,14 +664,32 @@ void Runtime::advance_pictures() {
 
 void Runtime::picture_effect(const Json& cmd, Context c) {
     const int options = arg(cmd, 0), type = (options >> 4) & 15;
-    if ((options & ~255) || (options & 15) != 0 || cmd.at("args").size() != 7 || (type != 5 && type != 6))
+    if ((options & ~255) || (options & 15) != 0 || cmd.at("args").size() != 7 ||
+        (type != 2 && type != 3 && type != 5 && type != 6 && type != 7 && type != 8 && type != 9 && type != 10))
         fail("Unsupported picture-effect target or layout");
     const int duration = std::max(0, number(arg(cmd, 1), c));
     const int first = number(arg(cmd, 2), c), last = number(arg(cmd, 3), c);
     const Json color = Json::array({number(arg(cmd, 4), c), number(arg(cmd, 5), c), number(arg(cmd, 6), c)});
+    if (type == 2 && color.at(2) != 0) fail("Unsupported picture-shift extra operand");
+    if ((type == 3 || type == 7) && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Nonzero picture shake/automatic zoom is not implemented");
+    if (type >= 8 && (color.at(2) != 0 || (duration && (color.at(0).get<int>() < 1 || color.at(1).get<int>() < 1)))) fail("Unsupported automatic picture-pattern operands");
     for (auto& picture : pictures_) {
         const int id = picture.at("id");
-        if (id < first || id > last) continue;
+        if (id < std::min(first, last) || id > std::max(first, last)) continue;
+        if (type == 3 || type == 7) { picture.erase(type == 3 ? "shake" : "automatic_zoom"); continue; }
+        if (type >= 8) {
+            if (duration == 0) picture.erase("pattern_effect");
+            else picture["pattern_effect"] = {{"type", type}, {"start", frame_}, {"interval", duration}, {"first", color.at(0)}, {"last", color.at(1)}};
+            continue;
+        }
+        if (type == 2) {
+            auto shift = picture.value("draw_shift", Json{{"x", 0}, {"y", 0}});
+            shift.erase("tween");
+            const Json to = {{"x", color.at(0)}, {"y", color.at(1)}};
+            if (duration) shift["tween"] = {{"start", frame_}, {"duration", duration}, {"from", shift}, {"to", to}};
+            else shift = to;
+            picture["draw_shift"] = std::move(shift); continue;
+        }
         if (duration == 0 || (color.at(0) == 0 && color.at(1) == 0 && color.at(2) == 0)) picture.erase("flicker");
         else picture["flicker"] = {{"type", type}, {"duration", duration}, {"start", frame_ + 1}, {"color", color}};
     }
@@ -475,10 +703,12 @@ void Runtime::show_choice(Run& run, const Json& cmd) {
     if (choice_.empty()) {
         Json strings = Json::array();
         for (const auto& text : cmd.at("strings")) strings.push_back(expand(text, frame.context));
+        for (std::size_t i = 0; i < strings.size() && i < 10; ++i) set_text(9900040 + static_cast<int>(i), strings.at(i));
         choice_ = {{"owner", run.owner}, {"pc", frame.pc - 1}, {"common", frame.context.common},
             {"strings", strings}, {"selected", std::clamp(number(9000007), 0, count - 1)}, {"cancel", cancel},
             {"opened", frame_}, {"repeat", 0}, {"done", false}, {"x", number(9000003)}, {"y", number(9000004)}};
         set_number(9000020, choice_.at("selected"));
+        prepare_choice_layout();
         choice_clear_after_ = 0;
     }
     if (choice_.at("owner") != run.owner || choice_.at("common") != frame.context.common || choice_.at("pc") != frame.pc - 1 || !choice_.at("done").get<bool>()) {
@@ -498,6 +728,27 @@ void Runtime::show_choice(Run& run, const Json& cmd) {
     fail("Choice has no matching branch");
 }
 
+void Runtime::transfer(const Json& cmd, Context context) {
+    if (cmd.at("args").size() != 5 || arg(cmd, 0) != -1 || (arg(cmd, 4) & ~1))
+        fail("Unsupported transfer target, transition or position layout");
+    const int destination = number(arg(cmd, 3), context) == -1 ? map_ : number(arg(cmd, 3), context);
+    if (!map_data(destination)) fail("Transfer destination map is missing");
+    const auto& settings = databases_.at("system").at("types").at(0).at("rows").at(destination);
+    if (destination != map_) {
+        for (int kind = 0; kind < 2; ++kind) {
+            const int setting = settings.at(1 + kind);
+            if (setting != -2 && setting != -1) fail("Database/filename destination-map audio is not implemented");
+        }
+        for (int kind = 0; kind < 2; ++kind) if (settings.at(1 + kind) == -1)
+            audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1}, {"fade_ms", 0}});
+    }
+    const int scale = arg(cmd, 4) & 1 ? 1 : 2;
+    hero_x_ = number(arg(cmd, 1), context) * scale; hero_y_ = number(arg(cmd, 2), context) * scale;
+    map_ = destination;
+    const auto hero = character_key(-2, context);
+    characters_.at(hero)["x"] = hero_x_; characters_.at(hero)["y"] = hero_y_;
+}
+
 void Runtime::advance_choice() {
     if (choice_.empty() || choice_.at("done") == true || choice_.at("opened").get<std::uint64_t>() == frame_) return;
     const int count = static_cast<int>(choice_.at("strings").size());
@@ -507,16 +758,46 @@ void Runtime::advance_choice() {
     if (input_.wheel) { direction = input_.wheel > 0 ? -1 : 1; choice_["repeat"] = frame_; }
     if (direction && (new_direction || frame_ >= choice_.at("repeat").get<std::uint64_t>())) {
         selected = (selected + direction + count) % count;
+        choice_sound(9000018);
         choice_["repeat"] = frame_ + std::max(1, number(new_direction ? 9000015 : 9000016));
     }
-    bool done = (input_.confirm && !previous_input_.confirm) || input_.mouse_left_new;
+    const bool keyboard_confirm = input_.confirm && !previous_input_.confirm;
+    bool done = keyboard_confirm || input_.mouse_left_new;
+    if (choice_.contains("layout") && (input_.mouse_left_new || input_.mouse_x != previous_input_.mouse_x || input_.mouse_y != previous_input_.mouse_y)) {
+        const auto& layout = choice_.at("layout");
+        const int x = layout.at("x"), top = layout.at("y").get<int>() + layout.at("pad_y").get<int>();
+        bool hit = false;
+        if (input_.mouse_x >= x && input_.mouse_x < x + layout.at("width").get<int>()) {
+            for (std::size_t i = 0; i < layout.at("rows").size(); ++i) {
+                const auto& row = layout.at("rows").at(i);
+                const int y = top + row.at("top").get<int>();
+                if (input_.mouse_y >= y && input_.mouse_y < y + row.at("height").get<int>()) { selected = static_cast<int>(i); hit = true; break; }
+            }
+        }
+        if (input_.mouse_left_new && !hit && !keyboard_confirm) done = false;
+    }
+    if (done) choice_sound(9000017);
     const int cancel = choice_.at("cancel");
-    if (input_.cancel && !previous_input_.cancel && cancel != 1) { selected = cancel == 0 ? -2 : cancel - 2; done = true; }
+    if (input_.cancel && !previous_input_.cancel && cancel != 1) {
+        selected = cancel == 0 ? -2 : cancel - 2; done = true; choice_sound(9000019);
+    }
     choice_["selected"] = selected; choice_["done"] = done; set_number(9000020, selected);
 }
 
+void Runtime::choice_sound(int variable) {
+    const int id = number(variable);
+    if (id < 0) return;
+    const auto& row = databases_.at("system").at("types").at(3).at("rows").at(id);
+    const std::string file = row.at(0);
+    if (file.empty()) return;
+    const int volume = row.at(1), frequency = row.at(2);
+    audio_.push_back({{"operation", "play"}, {"kind", 2}, {"file", expand(file, {})}, {"channel", 0},
+        {"volume", volume == 0 ? 100 : volume}, {"tempo", frequency == 0 ? 100 : frequency},
+        {"fade_ms", 0}, {"start_ms", 0}, {"loop_ms", 0}});
+}
+
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame) {
-    std::array<double, 3> result{100, 100, 100};
+    std::array<double, 3> result{picture.value("red", 100.0), picture.value("green", 100.0), picture.value("blue", 100.0)};
     if (!picture.contains("flicker")) return result;
     const auto& flicker = picture.at("flicker");
     const auto start = flicker.at("start").get<std::uint64_t>();
@@ -525,8 +806,23 @@ std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame) {
     const double phase = static_cast<double>((frame - start) % (duration * 2)) / duration;
     const double amount = flicker.at("type") == 5 ? (phase <= 1 ? phase : 2 - phase) :
         1 - static_cast<double>((frame - start) % duration) / duration;
-    for (int i = 0; i < 3; ++i) result[i] = std::clamp(100 + flicker.at("color").at(i).get<double>() * amount, 0.0, 200.0);
+    for (int i = 0; i < 3; ++i) result[i] = std::clamp(result[i] + flicker.at("color").at(i).get<double>() * amount, 0.0, 200.0);
     return result;
+}
+
+int picture_pattern(const Json& picture, std::uint64_t frame) {
+    if (!picture.contains("pattern_effect")) return picture.at("pattern");
+    const auto& effect = picture.at("pattern_effect");
+    const int first = effect.at("first"), last = effect.at("last");
+    const auto age = frame - effect.at("start").get<std::uint64_t>();
+    const auto elapsed = age / effect.at("interval").get<std::uint64_t>();
+    const int count = std::abs(last - first) + 1, type = effect.at("type");
+    if (type == 8 && elapsed >= static_cast<unsigned>(count)) return picture.at("pattern");
+    int step = static_cast<int>(elapsed % count);
+    if (type == 10 && count > 1) {
+        step = static_cast<int>(elapsed % (2 * count - 2)); if (step >= count) step = 2 * count - 2 - step;
+    }
+    return first + (first <= last ? step : -step);
 }
 
 void Runtime::execute(Run& run, const Json& cmd) {
@@ -535,7 +831,9 @@ void Runtime::execute(Run& run, const Json& cmd) {
     auto value = [&](std::size_t i) { return number(arg(cmd, i), context); };
     switch (code) {
     case 0: case 99: case 103: case 212: case 499: return;
+    case 101: show_message(run, cmd); return;
     case 102: show_choice(run, cmd); return;
+    case 130: transfer(cmd, context); return;
     case 111: {
         std::vector<bool> conditions;
         for (int i = 0, n = arg(cmd, 0) & 15; i < n; ++i)
@@ -630,13 +928,16 @@ void Runtime::execute(Run& run, const Json& cmd) {
     case 140: {
         const int kind = (arg(cmd, 0) >> 4) & 15;
         if (kind > 2 || arg(cmd, 0) != (0x02000000 | (kind << 4)) ||
-            cmd.at("args").size() != (kind == 2 ? 6 : 7) || value(2) != 0 || (kind == 2 && value(1) != 0))
+            cmd.at("args").size() != (kind == 2 ? 6 : 7) || cmd.at("strings").size() != 1 || value(2) != 0)
             fail("Unsupported sound-command layout (filename playback only)");
         if (value(5) <= 0) fail("Sound frequency must be positive");
-        audio_.push_back({{"operation", "play"}, {"kind", kind}, {"file", expand(cmd.at("strings").at(0), context)},
+        const Json event = {{"operation", "play"}, {"kind", kind}, {"file", expand(cmd.at("strings").at(0), context)},
             {"channel", kind == 2 ? value(3) : 0}, {"volume", value(4)}, {"tempo", value(5)},
             {"start_ms", kind == 2 ? 0 : std::max(0, value(3))}, {"loop_ms", kind == 2 ? 0 : value(6)},
-            {"fade_ms", kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_.at("game").at("fps").get<int>()}});
+            {"fade_ms", kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_.at("game").at("fps").get<int>()}};
+        const int delay = kind == 2 ? std::max(0, value(1)) : 0;
+        if (delay) pending_audio_.push_back({{"start", frame_ + delay}, {"event", event}});
+        else audio_.push_back(event);
         return;
     }
     case 123: {
@@ -668,6 +969,7 @@ void Runtime::execute(Run& run, const Json& cmd) {
             {"wait", ((arg(cmd, 1) >> 16) & 255) != 0}};
         return;
     case 124: {
+        if (((arg(cmd, 1) >> 12) & 15) == 4) { picture_query(cmd, context); return; }
         if (cmd.at("args").size() != 3 || ((arg(cmd, 1) >> 12) & 15) != 3 || (arg(cmd, 1) & 255))
             fail("Unsupported extended-variable query layout");
         int result = 0;
@@ -680,6 +982,13 @@ void Runtime::execute(Run& run, const Json& cmd) {
         case 15: result = current_map()->at("width"); break;
         case 16: result = current_map()->at("height"); break;
         case 17: result = context.common; break;
+        case 18:
+            result = -1;
+            for (const auto& active : runs_) if (active.blocking && !active.stack.empty()) {
+                const auto root = active.stack.front().context;
+                result = root.common >= 0 ? 500000 + root.common : root.event; break;
+            }
+            break;
         case 20: result = input_.mouse_x; break;
         case 21: result = input_.mouse_y; break;
         default: fail("Unsupported extended-variable query field " + std::to_string(arg(cmd, 2)));
@@ -689,11 +998,23 @@ void Runtime::execute(Run& run, const Json& cmd) {
     }
     case 125: {
         const int options = arg(cmd, 0);
-        if (options & ~255) fail("Automatic keyboard/mouse input is not implemented");
-        input_.confirm |= (options & 1) != 0; input_.cancel |= (options & 2) != 0;
-        input_.sub |= (options & 4) != 0; input_.down |= (options & 16) != 0;
-        input_.left |= (options & 32) != 0; input_.right |= (options & 64) != 0; input_.up |= (options & 128) != 0;
+        if (cmd.at("args").size() != 1 || (options & ~247)) fail("Automatic keyboard/mouse input is not implemented");
+        pending_auto_input_ |= options;
         return;
+    }
+    case 126: {
+        if (cmd.at("args").size() != 1) fail("Unsupported input-permission operand count");
+        const int options = arg(cmd, 0);
+        if ((options & 0xff000000) == 0x10000000) {
+            if (options != 0x10000001 && options != 0x10000101) fail("Only mouse-device permissions are implemented");
+            mouse_enabled_ = (options & 256) == 0;
+        } else {
+            const int mode = (options >> 8) & 255;
+            if ((options & ~0x3f7) || mode > 2) fail("Unsupported basic-input permissions");
+            const std::array<int, 7> bits{1, 2, 4, 16, 32, 64, 128};
+            for (std::size_t i = 0; i < bits.size(); ++i) if (options & bits[i]) input_permissions_[i] = mode;
+        }
+        apply_input_permissions(); return;
     }
     case 250: {
         const int options = arg(cmd, 3), bank = (options >> 8) & 15, operation = (options >> 12) & 15;
@@ -792,7 +1113,8 @@ void Runtime::execute(Run& run, const Json& cmd) {
         bool found = false;
         while (start > 0) {
             --start; const int candidate = list.at(start).at("code"), depth = list.at(start).at("indent");
-            if ((candidate == 170 || candidate == 179) && depth == (code == 498 ? indent : indent - 1)) { found = true; break; }
+            if ((candidate == 170 || candidate == 179) &&
+                (code == 498 ? depth == indent : depth < indent && f.loops.count(start) != 0)) { found = true; break; }
         }
         if (!found) fail("Loop control outside a loop");
         if (code == 171) {
@@ -834,7 +1156,9 @@ Json Runtime::diagnostics() const {
             {"map", f.context.map}, {"page", f.context.page}, {"pc", f.pc}});
         if (!frames.empty()) stacks.push_back({{"owner", run.owner}, {"frames", frames}});
     }
-    return {{"frame", frame_}, {"map", map_}, {"error", error_}, {"project_id", project_id_},
+    Json message = Json::object();
+    if (!message_state_.empty()) for (const char* field : {"x", "y", "visible", "total", "complete", "done"}) message[field] = message_state_.at(field);
+    return {{"frame", frame_}, {"map", map_}, {"error", error_}, {"project_id", project_id_}, {"message", message},
         {"context", {{"common", error_context_.common}, {"event", error_context_.event}, {"page", error_context_.page}}},
         {"command", error_command_}, {"executed", counts}, {"pictures", pictures_.size()}, {"stacks", stacks}};
 }
@@ -860,21 +1184,26 @@ Json Runtime::snapshot() const {
         {"target", route.target}, {"source", route.source}, {"common", route.context.common},
         {"event", route.context.event}, {"page", route.context.page}, {"map", route.context.map}});
     std::ostringstream rng; rng << random_;
-    return {{"format", "wolf-ios-state"}, {"version", 3}, {"title", project_.at("game").at("title")}, {"project_id", project_id_},
-        {"frame", frame_}, {"map", map_}, {"hero_x", hero_x_}, {"hero_y", hero_y_},
+    return {{"format", "wolf-ios-state"}, {"version", 6}, {"title", project_.at("game").at("title")}, {"project_id", project_id_},
+        {"frame", frame_}, {"play_time_ticks", play_time_ticks_}, {"map", map_}, {"hero_x", hero_x_}, {"hero_y", hero_y_},
         {"numbers", numbers}, {"strings", strings}, {"databases", databases_}, {"pictures", pictures_},
         {"runs", runs}, {"rng", rng.str()}, {"message", message_}, {"transition", transition_},
         {"characters", characters_}, {"party", party_}, {"routes", routes}, {"next_route", next_route_},
-        {"pending_picture_erases", pending_picture_erases_}, {"choice", choice_}, {"choice_clear_after", choice_clear_after_},
-        {"previous_input", {{"up", previous_input_.up}, {"down", previous_input_.down}, {"confirm", previous_input_.confirm}, {"cancel", previous_input_.cancel}}}};
+        {"pending_picture_erases", pending_picture_erases_}, {"pending_picture_changes", pending_picture_changes_}, {"choice", choice_}, {"choice_clear_after", choice_clear_after_}, {"message_state", message_state_},
+        {"input_permissions", input_permissions_}, {"mouse_enabled", mouse_enabled_}, {"pending_auto_input", pending_auto_input_}, {"pending_audio", pending_audio_},
+        {"previous_input", {{"up", previous_input_.up}, {"down", previous_input_.down}, {"left", previous_input_.left}, {"right", previous_input_.right},
+            {"confirm", previous_input_.confirm}, {"cancel", previous_input_.cancel}, {"sub", previous_input_.sub},
+            {"mouse_left", previous_input_.mouse_left}, {"mouse_right", previous_input_.mouse_right}, {"mouse_middle", previous_input_.mouse_middle},
+            {"mouse_x", previous_input_.mouse_x}, {"mouse_y", previous_input_.mouse_y}}}};
 }
 
 void Runtime::restore(const Json& state) {
-    if (state.at("format") != "wolf-ios-state" || state.at("version") != 3 ||
+    if (state.at("format") != "wolf-ios-state" || state.at("version") != 6 ||
         state.at("title") != project_.at("game").at("title") || state.at("project_id") != project_id_)
         fail("Incompatible native save: source game data differs");
     Runtime candidate(project_, save_root_, asset_root_);
     candidate.frame_ = state.at("frame"); candidate.map_ = state.at("map");
+    candidate.play_time_ticks_ = state.at("play_time_ticks");
     candidate.hero_x_ = state.at("hero_x"); candidate.hero_y_ = state.at("hero_y");
     candidate.numbers_.clear();
     for (const auto& [key, value] : state.at("numbers").items()) candidate.numbers_[std::stoull(key)] = value;
@@ -882,6 +1211,22 @@ void Runtime::restore(const Json& state) {
     candidate.databases_ = state.at("databases"); candidate.pictures_ = state.at("pictures");
     candidate.transition_ = state.at("transition");
     candidate.choice_ = state.at("choice"); candidate.choice_clear_after_ = state.at("choice_clear_after");
+    candidate.message_state_ = state.at("message_state");
+    candidate.input_permissions_ = state.at("input_permissions").get<std::array<int, 7>>();
+    candidate.mouse_enabled_ = state.at("mouse_enabled");
+    candidate.pending_auto_input_ = state.at("pending_auto_input");
+    candidate.pending_audio_ = state.value("pending_audio", Json::array());
+    if (!candidate.pending_audio_.is_array()) fail("Invalid saved delayed sound queue");
+    for (const auto& pending : candidate.pending_audio_) {
+        (void)pending.at("start").get<std::uint64_t>();
+        if (pending.at("event").at("kind") != 2 || pending.at("event").at("operation") != "play") fail("Invalid saved delayed sound event");
+    }
+    if (candidate.pending_auto_input_ & ~247) fail("Invalid saved automatic input");
+    for (int mode : candidate.input_permissions_) if (mode < 0 || mode > 2) fail("Invalid saved input permissions");
+    if (!candidate.message_state_.empty()) {
+        const int visible = candidate.message_state_.at("visible"), total = candidate.message_state_.at("total");
+        if (total < 0 || visible < 0 || visible > total) fail("Invalid saved message progress");
+    }
     if (!candidate.choice_.empty()) {
         const int selected = candidate.choice_.at("selected");
         if (!candidate.choice_.at("strings").is_array() || selected < -2 || selected >= static_cast<int>(candidate.choice_.at("strings").size()))
@@ -890,11 +1235,23 @@ void Runtime::restore(const Json& state) {
     const auto& previous_input = state.at("previous_input");
     candidate.previous_input_.up = previous_input.at("up"); candidate.previous_input_.down = previous_input.at("down");
     candidate.previous_input_.confirm = previous_input.at("confirm"); candidate.previous_input_.cancel = previous_input.at("cancel");
+    candidate.previous_input_.left = previous_input.at("left"); candidate.previous_input_.right = previous_input.at("right"); candidate.previous_input_.sub = previous_input.at("sub");
+    candidate.previous_input_.mouse_left = previous_input.at("mouse_left"); candidate.previous_input_.mouse_right = previous_input.at("mouse_right"); candidate.previous_input_.mouse_middle = previous_input.at("mouse_middle");
+    candidate.previous_input_.mouse_x = previous_input.at("mouse_x"); candidate.previous_input_.mouse_y = previous_input.at("mouse_y");
     candidate.pending_picture_erases_ = state.at("pending_picture_erases");
     if (!candidate.pending_picture_erases_.is_array()) fail("Invalid delayed-picture state");
     for (const auto& erase : candidate.pending_picture_erases_) {
         (void)erase.at("id").get<int>(); (void)erase.at("start").get<std::uint64_t>();
         if (erase.at("duration").get<int>() < 0) fail("Invalid delayed-picture duration");
+    }
+    candidate.pending_picture_changes_ = state.at("pending_picture_changes");
+    if (!candidate.pending_picture_changes_.is_array()) fail("Invalid delayed-picture changes");
+    for (const auto& pending : candidate.pending_picture_changes_) {
+        (void)pending.at("start").get<std::uint64_t>();
+        const auto& action = pending.at("action");
+        (void)action.at("id").get<int>();
+        if ((action.at("operation") != 0 && action.at("operation") != 1) || action.at("duration").get<int>() < 0 || !action.at("values").is_object())
+            fail("Invalid delayed-picture action");
     }
     candidate.characters_ = state.at("characters"); candidate.party_ = state.at("party"); candidate.next_route_ = state.at("next_route");
     for (const auto& item : state.at("routes")) {

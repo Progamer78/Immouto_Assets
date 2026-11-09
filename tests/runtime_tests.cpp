@@ -1,6 +1,7 @@
 #include "runtime.hpp"
 #include "asset_cache.hpp"
 #include "input_replay.hpp"
+#include "text.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -17,6 +18,7 @@ Json project(const std::vector<Json>& commands) {
     Json types = Json::array();
     for (int i = 0; i < 8; ++i) types.push_back({{"rows", Json::array()}});
     types[0]["rows"] = {{"MapData/Test.mps"}}; types[7]["rows"] = {{0, 0, 0}};
+    types[3]["rows"] = Json::array({Json::array({"", 100, 100, 0})});
     Json p = {{"format", "wolf-ios-ir"}, {"version", 1}};
     p["game"] = {{"title", "fixture"}, {"width", 1024}, {"height", 576}, {"fps", 60}};
     p["common"]["events"] = Json::array({{{"id", 0}, {"name", "test"}, {"mode", 0},
@@ -236,7 +238,7 @@ void picture_flicker_and_input_replay() {
 }
 void delayed_picture_fade_and_sound() {
     const auto p = project({cmd(150, {0, 5, 0, 1, 1, 1, 200, 0, 0, 100, 0}, 0, {"test.png"}),
-        cmd(150, {2, 5, 4, 2}), cmd(140, {33554464, 0, 0, 7, 80, 120}, 0, {"SE/test.ogg"}), cmd(180, {100})});
+        cmd(150, {65538, 5, 4, 2}), cmd(140, {33554464, 0, 0, 7, 80, 120}, 0, {"SE/test.ogg"}), cmd(180, {100})});
     wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
     const auto audio = rt.take_audio(); REQUIRE(audio.size() == 1);
     REQUIRE(audio.at(0).at("file") == "SE/test.ogg"); REQUIRE(audio.at(0).at("channel") == 7);
@@ -251,17 +253,20 @@ void delayed_picture_fade_and_sound() {
     during.tick(); REQUIRE(during.pictures().empty()); REQUIRE(during.error().empty());
 }
 void choices_wait_and_restore() {
-    const auto p = project({cmd(102, {19}, 0, {"first", "second", "third"}),
+    auto p = project({cmd(102, {19}, 0, {"first", "second", "third"}),
         cmd(401, {2}), cmd(121, {2000000, 10, 0, 0}, 1),
         cmd(401, {3}), cmd(121, {2000000, 20, 0, 0}, 1),
         cmd(401, {4}), cmd(121, {2000000, 30, 0, 0}, 1), cmd(499)});
-    wolf::Runtime rt(p); rt.start_common(0);
+    p["databases"]["system"]["types"][3]["rows"] = Json::array({Json::array({"SE/confirm.wav", 90, 100, 0}), Json::array({"SE/cursor.wav", 50, 120, 0})});
+    wolf::Runtime rt(p); rt.set_number(9000018, 1); rt.start_common(0);
     wolf::Input confirm; confirm.confirm = true;
     rt.tick(confirm); rt.tick(confirm); REQUIRE(rt.number(2000000) == 0); REQUIRE(rt.number(9000020) == 0);
     rt.tick(); wolf::Input down; down.down = true; rt.tick(down); REQUIRE(rt.number(9000020) == 1);
+    REQUIRE(rt.take_audio().at(0).at("file") == "SE/cursor.wav");
     wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); loaded.tick(confirm);
     REQUIRE(loaded.number(2000000) == 0); loaded.tick(); REQUIRE(loaded.number(2000000) == 20);
     REQUIRE(loaded.number(9000020) == 1); loaded.tick(); REQUIRE(loaded.number(9000020) == -1); REQUIRE(loaded.error().empty());
+    REQUIRE(loaded.take_audio().at(0).at("file") == "SE/confirm.wav");
 }
 void picture_interpolation_survives_resume() {
     const auto p = project({cmd(150, {0, 7, 4, 1, 1, 1, 200, 10, 20, 100, 0}, 0, {"test.png"}), cmd(180, {4}),
@@ -275,6 +280,203 @@ void picture_interpolation_survives_resume() {
     REQUIRE(halfway.at("zoom") == 150); REQUIRE(halfway.at("angle") == 450); REQUIRE(halfway.at("opacity") == 150);
     loaded.tick(); loaded.tick(); REQUIRE(loaded.pictures().at("7").at("x") == 30);
     REQUIRE(!loaded.pictures().at("7").contains("tween")); REQUIRE(loaded.error().empty());
+}
+void transfer_preserves_caller_and_changes_map() {
+    auto p = project({cmd(130, {-1, 7, 6, 1, 0}), cmd(121, {2000001, 42, 0, 0})});
+    p["databases"]["system"]["types"][0]["rows"].push_back({"MapData/Other.mps", -2, -2});
+    p["maps"][0]["events"].push_back({{"id", 0}, {"pages", {{{"trigger", 2}, {"switches", {0, 0, 0, 0}},
+        {"commands", Json::array({cmd(180, {50}), cmd(121, {2000000, 99, 0, 0})})}}}}});
+    const Json page = {{"trigger", 1}, {"switches", {0, 0, 0, 0}},
+        {"commands", Json::array({cmd(121, {2000000, 7, 0, 0}), cmd(180, {100})})}};
+    const Json event = {{"id", 0}, {"pages", Json::array({page})}};
+    p["maps"].push_back({{"file", "MapData/Other.mps"}, {"events", Json::array({event})}});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000001) == 42);
+    const auto state = rt.snapshot(); REQUIRE(state.at("map") == 1); REQUIRE(state.at("hero_x") == 14); REQUIRE(state.at("hero_y") == 12);
+    REQUIRE(rt.characters().at("hero").at("x") == 14);
+    wolf::Runtime loaded(p); loaded.restore(state); loaded.tick(); REQUIRE(loaded.number(2000000) == 7);
+    for (int i = 0; i < 51; ++i) loaded.tick();
+    REQUIRE(loaded.number(2000000) == 7); REQUIRE(loaded.error().empty());
+}
+void picture_ranges_match_windows() {
+    std::vector<Json> commands;
+    for (int id = -3; id <= 8; ++id) if (id != 0)
+        commands.push_back(cmd(150, {0, id, 0, 1, 1, 1, 255, 0, 0, 100, 0}, 0, {"test.png"}));
+    commands.push_back(cmd(150, {16777218, 3, 0, 0, 0, 5}));
+    commands.push_back(cmd(150, {16777218, -1, 0, 0, 0, -2}));
+    wolf::Runtime rt(project(commands)); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.pictures().size() == 6);
+    for (int id : {-3, 1, 2, 6, 7, 8}) REQUIRE(rt.pictures().contains(std::to_string(id)));
+}
+void nested_condition_breaks_nearest_loop() {
+    wolf::Runtime rt(project({cmd(179, {2}), cmd(179, {5}, 1), cmd(111, {1, 1, 1, 2}, 2),
+        cmd(401, {1}, 2), cmd(121, {2000000, 1, 0, 256}, 3), cmd(171, {}, 3), cmd(499, {}, 2),
+        cmd(498, {}, 1), cmd(121, {2000001, 1, 0, 256}, 1), cmd(498)}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000000) == 2); REQUIRE(rt.number(2000001) == 2);
+}
+void picture_hover_uses_original_dimensions() {
+    const auto temp = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
+    const auto base = temp / ("wolf-picture-query-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    REQUIRE(base.parent_path() == temp); std::filesystem::create_directories(base / "Data");
+    const unsigned char png[] = {137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,8,0,0,0,6,8,6,0,0,0,254,5,223,251,0,0,0,20,73,68,65,84,120,156,99,248,255,255,63,3,62,140,87,114,176,40,0,0,196,7,143,113,180,214,159,217,0,0,0,0,73,69,78,68,174,66,96,130};
+    { std::ofstream file(base / "Data/picture.png", std::ios::binary); file.write(reinterpret_cast<const char*>(png), sizeof(png)); }
+    auto p = project({cmd(150, {4096, 3, 0, 2, 1, 1, 0, 20, 30, 200, 0}, 0, {"PICTURE.png"}),
+        cmd(124, {2000000, 16384, 3, 8}), cmd(124, {2000001, 16384, 3, 2}), cmd(124, {2000002, 16384, 3, 3}),
+        cmd(124, {2000003, 16384, 3, 9}), cmd(124, {2000004, 16384, 100, 8})});
+    wolf::Runtime rt(p, {}, base.u8string()); wolf::Input input; input.mouse_x = 16; input.mouse_y = 24;
+    rt.start_common(0); rt.tick(input); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000000) == 1);
+    REQUIRE(rt.number(2000001) == 4); REQUIRE(rt.number(2000002) == 6);
+    REQUIRE(rt.number(2000003) == 1); REQUIRE(rt.number(2000004) == -1);
+    input.mouse_x = 24; rt.start_common(0); rt.tick(input); REQUIRE(rt.number(2000000) == 0);
+    input.mouse_x = 20; input.mouse_y = 36; rt.start_common(0); rt.tick(input); REQUIRE(rt.number(2000000) == 0);
+    REQUIRE(rt.error().empty()); std::filesystem::remove_all(base);
+}
+void message_reveal_waits_and_restores() {
+    const auto p = project({cmd(101, {}, 0, {"Hello \\s[0]"}), cmd(121, {2000000, 77, 0, 0})});
+    wolf::Runtime rt(p); rt.set_number(9000008, 20); rt.set_number(9000009, 60); rt.set_number(9000010, 2);
+    rt.set_text(9900026, "\\E"); rt.set_text(3000000, "world"); rt.start_common(0);
+    rt.tick(); rt.tick(); REQUIRE(rt.number(2000000) == 0); REQUIRE(rt.message_state().at("visible") == 0);
+    rt.tick(); REQUIRE(rt.message_state().at("visible") == 1); REQUIRE(rt.number(9000012) == 1);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); wolf::Input confirm; confirm.confirm = true;
+    loaded.tick(confirm); REQUIRE(loaded.message_state().at("complete") == true); REQUIRE(loaded.number(2000000) == 0);
+    loaded.tick(confirm); REQUIRE(loaded.number(9000012) == 1); loaded.tick(); loaded.tick(confirm);
+    REQUIRE(loaded.number(9000012) == 0); loaded.tick(); REQUIRE(loaded.message_state().empty()); REQUIRE(loaded.number(2000000) == 77);
+    REQUIRE(loaded.text(9900025) == "\\EHello world"); REQUIRE(loaded.error().empty());
+    wolf::Runtime automatic(project({cmd(101, {}, 0, {"@5\n\\>short\\^"}), cmd(121, {2000000, 1, 0, 0})}));
+    automatic.start_common(0); automatic.tick(); REQUIRE(automatic.number(9000000) == 5); automatic.tick();
+    REQUIRE(automatic.number(2000000) == 1); REQUIRE(automatic.error().empty());
+}
+void database_and_many_text_substitutions() {
+    auto p = project({});
+    p["databases"]["user"]["types"] = Json::array({{{"schema", {{"name", "table"}, {"names", {"row"}}}},
+        {"rows", Json::array({Json::array({7, "style \\v[1]"})})}}});
+    wolf::Runtime rt(p); rt.set_number(2000000, 1); rt.set_number(2000001, 42); rt.set_number(2000002, 0);
+    REQUIRE(rt.expand("\\udb[\\v[2]:0:0]", {}) == "7"); REQUIRE(rt.expand("\\udb[0:0:1]", {}) == "style 42");
+    REQUIRE(rt.expand("\\udb[0]/\\udb[0:0]", {}) == "table/row");
+    std::string many; for (int i = 0; i < 100; ++i) many += "\\v[0] ";
+    REQUIRE(rt.expand(many, {}).size() == 200); REQUIRE(rt.expand("\\\\v[0]", {}) == "\\\\v[0]");
+    rt.set_text(3000000, "\\s[0]"); bool rejected = false; try { rt.expand("\\s[0]", {}); } catch (...) { rejected = true; }
+    REQUIRE(rejected);
+}
+void picture_delay_reset_splits_pending_range() {
+    std::vector<Json> commands;
+    for (int id = 1; id <= 3; ++id) commands.push_back(cmd(150, {0, id, 0, 1, 1, 1, 255, 0, 0, 100, 0}, 0, {"test.png"}));
+    commands.push_back(cmd(150, {16777218, 1, 0, 2, 0, 3})); commands.push_back(cmd(150, {3, 2}));
+    commands.push_back(cmd(180, {100}));
+    const auto p = project(commands); wolf::Runtime rt(p); rt.start_common(0); rt.tick();
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); loaded.tick();
+    REQUIRE(loaded.error().empty()); REQUIRE(loaded.pictures().size() == 1); REQUIRE(loaded.pictures().contains("2"));
+}
+void picture_move_preserves_graphic_and_same_values() {
+    wolf::Runtime rt(project({cmd(150, {0, 3, 0, 1, 1, 1, 200, 10, 20, 100, 0}, 0, {"test.png"}),
+        cmd(150, {65537, 3, 2, 0, 0, -1000000, -1000000, 4, -2, -1000000, -1000000}), cmd(180, {50})}));
+    rt.start_common(0); rt.tick(); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.pictures().at("3").at("x") == 12); REQUIRE(rt.pictures().at("3").at("y") == 19);
+    rt.tick(); REQUIRE(rt.pictures().at("3").at("x") == 14); REQUIRE(rt.pictures().at("3").at("y") == 18);
+    REQUIRE(rt.pictures().at("3").at("opacity") == 200); REQUIRE(rt.pictures().at("3").at("zoom") == 100);
+    REQUIRE(rt.pictures().at("3").at("content") == "test.png");
+    wolf::Runtime same(project({cmd(150, {0, 3, 0, 1, 1, 1, 200, 10, 20, 125, 0}, 0, {"test.png"}),
+        cmd(150, {4259841, 3, 0, 0, 0, 1, 0, 0, 0, 50, 0, 0, 16777216})}));
+    same.start_common(0); same.tick(); REQUIRE(same.error().empty());
+    REQUIRE(same.pictures().at("3").at("zoom") == 125); REQUIRE(same.pictures().at("3").at("opacity") == 0);
+}
+void delayed_text_picture_reveal_survives_restore() {
+    const auto p = project({cmd(121, {2000000, 10, 0, 0}),
+        cmd(150, {3145760, 7, 0, 1, 1, 1, 255, 2000000, 30, 80, 0, 0, 33554432, 2, 0, 50, 100, 75, 120}, 0, {"\\ax[120]\n\\ay[0]\\sp[60]\\EAB\xc3\xa9"}),
+        cmd(121, {2000000, 99, 0, 0}), cmd(180, {100})});
+    wolf::Runtime rt(p); rt.set_number(9000008, 20); rt.start_common(0); rt.tick();
+    REQUIRE(rt.error().empty()); REQUIRE(rt.pictures().at("7").at("kind") == -1); rt.tick();
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick();
+    REQUIRE(loaded.pictures().at("7").at("x") == 10); REQUIRE(loaded.pictures().at("7").at("zoom_y") == 120);
+    REQUIRE(loaded.pictures().at("7").at("red") == 50); REQUIRE(loaded.pictures().at("7").at("text_style").at("visible_chars") == 0);
+    loaded.tick(); REQUIRE(loaded.pictures().at("7").at("text_style").at("visible_chars") == 1);
+    loaded.tick(); loaded.tick(); REQUIRE(loaded.pictures().at("7").at("text_style").at("visible_chars") == 3);
+    REQUIRE(loaded.error().empty());
+    const auto times = text_reveal_times("A\\sp[60]B\\>CD\\<E", 0);
+    REQUIRE(times.size() == 5); REQUIRE(times[0] == 0); REQUIRE(times[1] == times[2]); REQUIRE(times[2] == times[3]); REQUIRE(times[4] > times[3]);
+}
+void delayed_moves_use_current_position_and_can_be_cancelled() {
+    wolf::Runtime rt(project({cmd(150, {0, 7, 0, 1, 1, 1, 255, 10, 0, 100, 0}, 0, {"test.png"}),
+        cmd(150, {65537, 7, 0, 0, 0, -1000000, -1000000, 4, 0, -1000000, -1000000, 0, 16777216, 2}),
+        cmd(150, {1, 7, 0, 0, 0, -1000000, -1000000, 20, 0, -1000000, -1000000}),
+        cmd(150, {0, 8, 0, 1, 1, 1, 255, 0, 0, 100, 0, 0, 16777216, 2}, 0, {"cancelled.png"}),
+        cmd(150, {3, 8}), cmd(180, {50})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.pictures().at("7").at("x") == 20);
+    rt.tick(); rt.tick(); REQUIRE(rt.pictures().at("7").at("x") == 24); REQUIRE(rt.pictures().at("8").at("kind") == -1);
+}
+void pending_pictures_accept_effects_and_queries_like_windows() {
+    const auto p = project({cmd(150, {32, 7, 0, 1, 1, 1, 255, 50, 150, 100, 0, 0, 33554432, 2, 0, 100, 100, 100}, 0, {"Delayed text"}),
+        cmd(290, {32, 0, 7, 7, 50, 20, 0}), cmd(124, {2000000, 16384, 7, 9}), cmd(124, {2000001, 16384, 7, 10}),
+        cmd(124, {2000002, 16384, 7, 0}), cmd(124, {2000003, 16384, 7, 5}), cmd(124, {2000004, 16384, 999, 8}), cmd(180, {100})});
+    wolf::Runtime rt(p); rt.set_number(9000008, 20); rt.start_common(0); rt.tick();
+    REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000000) == 1); REQUIRE(rt.number(2000001) == -1);
+    REQUIRE(rt.number(2000002) == 0); REQUIRE(rt.number(2000003) == 0); REQUIRE(rt.number(2000004) == -1);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); loaded.tick();
+    REQUIRE(loaded.pictures().at("7").at("kind") == 2); REQUIRE(loaded.pictures().at("7").at("x") == 50);
+    REQUIRE(loaded.pictures().at("7").at("draw_shift").at("x") == 50); REQUIRE(loaded.pictures().at("7").at("draw_shift").at("y") == 20);
+    REQUIRE(loaded.error().empty());
+}
+void picture_effects_are_separate_from_query_values() {
+    const auto p = project({cmd(150, {0, 3, 0, 4, 1, 2, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(290, {32, 4, 3, 3, 12, -4, 0}), cmd(290, {160, 1, 3, 3, 1, 4, 0}),
+        cmd(124, {2000000, 16384, 3, 0}), cmd(124, {2000001, 16384, 3, 4}), cmd(180, {50})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000000) == 20); REQUIRE(rt.number(2000001) == 2);
+    REQUIRE(rt.pictures().at("3").at("draw_shift").at("x") == 3);
+    REQUIRE(wolf::picture_pattern(rt.pictures().at("3"), 3) == 4); REQUIRE(wolf::picture_pattern(rt.pictures().at("3"), 4) == 3);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); loaded.tick(); loaded.tick();
+    REQUIRE(loaded.pictures().at("3").at("draw_shift").at("x") == 12); REQUIRE(loaded.pictures().at("3").at("x") == 20);
+}
+void ranged_move_includes_existing_ids_when_first_is_missing() {
+    wolf::Runtime rt(project({cmd(150, {0, 2, 0, 1, 1, 1, 255, 20, 0, 125, 0}, 0, {"test.png"}),
+        cmd(150, {0, 3, 0, 1, 1, 1, 255, 30, 0, 125, 0}, 0, {"test.png"}),
+        cmd(150, {21037057, 0, 0, 0, 0, -1000000, -1000000, 5, 0, 999, -1000000, 0, 16777216, 0, 4})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.pictures().at("2").at("x") == 25); REQUIRE(rt.pictures().at("3").at("x") == 35);
+    REQUIRE(rt.pictures().at("3").at("zoom") == 125);
+}
+void basic_and_mouse_input_permissions() {
+    const auto p = project({cmd(126, {513}), cmd(123, {2000000, 16}), cmd(126, {1}), cmd(123, {2000001, 16}),
+        cmd(126, {268435713}), cmd(123, {2000002, 784}), cmd(126, {268435457}), cmd(123, {2000003, 784}),
+        cmd(126, {752}), cmd(123, {2000004, 1}), cmd(180, {100})});
+    wolf::Runtime rt(p); wolf::Input input; input.confirm = true; input.down = true; input.mouse_left = input.mouse_left_new = true;
+    rt.start_common(0); rt.tick(input); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000000) == 0); REQUIRE(rt.number(2000001) == 10);
+    REQUIRE(rt.number(2000002) == 0); REQUIRE(rt.number(2000003) == 20); REQUIRE(rt.number(2000004) == 0);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.start_common(0); loaded.tick(input); REQUIRE(loaded.error().empty());
+    REQUIRE(loaded.number(2000004) == 0);
+}
+void automatic_basic_input_is_deferred_and_restored() {
+    const auto p = project({cmd(125, {1}), cmd(123, {2000000, 16}), cmd(180, {1}),
+        cmd(123, {2000001, 16}), cmd(180, {1}), cmd(123, {2000002, 16})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.number(2000000) == 0);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.number(2000001) == 10);
+    loaded.tick(); REQUIRE(loaded.number(2000002) == 0); REQUIRE(loaded.error().empty());
+}
+void delayed_se_dispatch_survives_restore() {
+    const auto p = project({cmd(140, {33554464, 2, 0, 0, 100, 100}, 0, {"SE/test.ogg"}), cmd(180, {50})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.take_audio().empty());
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.take_audio().empty());
+    loaded.tick(); const auto audio = loaded.take_audio(); REQUIRE(audio.size() == 1); REQUIRE(audio.at(0).at("file") == "SE/test.ogg");
+    loaded.tick(); REQUIRE(loaded.take_audio().empty());
+}
+void choice_mouse_selects_clicked_row_and_rejects_outside_click() {
+    const auto p = project({cmd(102, {18}, 0, {"first", "second"}), cmd(401, {2}), cmd(121, {2000000, 10, 0, 0}, 1),
+        cmd(401, {3}), cmd(121, {2000000, 20, 0, 0}, 1), cmd(499)});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); auto state = rt.snapshot();
+    state["choice"]["layout"] = {{"x", 100}, {"y", 100}, {"width", 200}, {"pad_y", 14},
+        {"rows", Json::array({{{"top", 0}, {"height", 26}}, {{"top", 26}, {"height", 26}}})}};
+    wolf::Runtime loaded(p); loaded.restore(state); wolf::Input click; click.mouse_left_new = true;
+    loaded.tick(click); REQUIRE(loaded.choice().at("done") == false);
+    loaded.tick(); click.mouse_x = 150; click.mouse_y = 150; loaded.tick(click);
+    REQUIRE(loaded.choice().at("selected") == 1); REQUIRE(loaded.choice().at("done") == true);
+    loaded.tick(); REQUIRE(loaded.number(2000000) == 20); REQUIRE(loaded.error().empty());
+}
+void game_clock_is_writable_and_survives_restore() {
+    const auto p = project({cmd(180, {100})}); wolf::Runtime rt(p);
+    rt.set_number(9000028, 9999999); rt.set_number(9000029, 7); rt.start_common(0); rt.tick();
+    REQUIRE(rt.number(9000028) == 0); REQUIRE(rt.number(9000029) == 7); REQUIRE(rt.number(9000030) == 16);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot());
+    for (int i = 0; i < 59; ++i) loaded.tick();
+    REQUIRE(loaded.number(9000028) == 59); REQUIRE(loaded.number(9000029) == 8); REQUIRE(loaded.number(9000030) == 0);
 }
 void full_install_and_thin_update() {
     const auto temp = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
@@ -297,7 +499,14 @@ void full_install_and_thin_update() {
 }
 int main() {
     try {
-        execution_and_waits(); branch_and_loop(); self_banks_and_snapshot(); unsupported_is_fatal(); atomic_overwrite(); named_database_and_bounds(); route_waits_and_persistence(); database_counts_and_absent_rows(); saved_variables_survive_restart(); literal_indirect_and_real_arithmetic(); common_event_string_arguments(); map_events_precede_parallel_common_events(); relative_common_calls(); string_conditions(); strings_and_resource_files(); picture_file_sources(); picture_flicker_and_input_replay(); delayed_picture_fade_and_sound(); choices_wait_and_restore(); picture_interpolation_survives_resume(); full_install_and_thin_update();
-        std::cout << "21 native runtime tests passed\n"; return 0;
+        execution_and_waits(); branch_and_loop(); self_banks_and_snapshot(); unsupported_is_fatal(); atomic_overwrite(); named_database_and_bounds(); route_waits_and_persistence(); database_counts_and_absent_rows(); saved_variables_survive_restart(); literal_indirect_and_real_arithmetic(); common_event_string_arguments(); map_events_precede_parallel_common_events(); relative_common_calls(); string_conditions(); strings_and_resource_files(); picture_file_sources(); picture_flicker_and_input_replay(); delayed_picture_fade_and_sound(); choices_wait_and_restore(); picture_interpolation_survives_resume(); transfer_preserves_caller_and_changes_map(); picture_ranges_match_windows(); nested_condition_breaks_nearest_loop(); picture_hover_uses_original_dimensions(); message_reveal_waits_and_restores(); database_and_many_text_substitutions(); picture_delay_reset_splits_pending_range(); picture_move_preserves_graphic_and_same_values(); full_install_and_thin_update();
+        delayed_text_picture_reveal_survives_restore(); delayed_moves_use_current_position_and_can_be_cancelled();
+        game_clock_is_writable_and_survives_restore();
+        pending_pictures_accept_effects_and_queries_like_windows();
+        picture_effects_are_separate_from_query_values(); ranged_move_includes_existing_ids_when_first_is_missing();
+        basic_and_mouse_input_permissions();
+        automatic_basic_input_is_deferred_and_restored(); choice_mouse_selects_clicked_row_and_rejects_outside_click();
+        delayed_se_dispatch_survives_restore();
+        std::cout << "39 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

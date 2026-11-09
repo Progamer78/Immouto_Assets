@@ -1,0 +1,268 @@
+{
+  "command": {
+    "args": [
+      16776960,
+      100,
+      0,
+      0
+    ],
+    "code": 140,
+    "indent": 0,
+    "offset": 46566,
+    "strings": []
+  },
+  "context": {
+    "common": -1,
+    "event": 0,
+    "page": 0
+  },
+  "error": "Unsupported sound-command layout (filename playback only)",
+  "executed": {
+    "0": 254216,
+    "101": 1804,
+    "102": 909,
+    "103": 951685,
+    "111": 178579,
+    "112": 160309,
+    "121": 244543,
+    "122": 170838,
+    "123": 9389,
+    "124": 39956,
+    "125": 1,
+    "126": 1,
+    "130": 2,
+    "140": 56,
+    "150": 13552,
+    "160": 1,
+    "170": 16,
+    "171": 1389,
+    "172": 181,
+    "179": 4475,
+    "180": 309,
+    "201": 2,
+    "210": 768,
+    "212": 17,
+    "213": 3749,
+    "221": 97,
+    "250": 2028,
+    "270": 3,
+    "290": 2311,
+    "300": 127,
+    "401": 4911,
+    "420": 18549,
+    "498": 4492,
+    "499": 186422,
+    "99": 21197
+  },
+  "frame": 3161,
+  "map": 1,
+  "message": {},
+  "pictures": 30,
+  "project_id": "67778d5a6703906a",
+  "stacks": [
+    {
+      "frames": [
+        {
+          "common": -1,
+          "event": 0,
+          "map": 1,
+          "page": 0,
+          "pc": 796
+        }
+      ],
+      "owner": "map:1:0"
+    },
+    {
+      "frames": [
+        {
+          "common": -1,
+          "event": 15,
+          "map": 1,
+          "page": 0,
+          "pc": 0
+        }
+      ],
+      "owner": "map:1:15"
+    },
+    {
+      "frames": [
+        {
+          "common": -1,
+          "event": 25,
+          "map": 1,
+          "page": 0,
+          "pc": 0
+        }
+      ],
+      "owner": "map:1:25"
+    },
+    {
+      "frames": [
+        {
+          "common": 38,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:38"
+    },
+    {
+      "frames": [
+        {
+          "common": 41,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:41"
+    },
+    {
+      "frames": [
+        {
+          "common": 48,
+          "event": -1,
+          "map": 0,
+          "page": -1,
+          "pc": 19
+        }
+      ],
+      "owner": "common:48"
+    },
+    {
+      "frames": [
+        {
+          "common": 213,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:213"
+    },
+    {
+      "frames": [
+        {
+          "common": 214,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:214"
+    },
+    {
+      "frames": [
+        {
+          "common": 216,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:216"
+    },
+    {
+      "frames": [
+        {
+          "common": 217,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:217"
+    },
+    {
+      "frames": [
+        {
+          "common": 224,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:224"
+    },
+    {
+      "frames": [
+        {
+          "common": 225,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:225"
+    },
+    {
+      "frames": [
+        {
+          "common": 261,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:261"
+    },
+    {
+      "frames": [
+        {
+          "common": 269,
+          "event": -1,
+          "map": 0,
+          "page": -1,
+          "pc": 82
+        }
+      ],
+      "owner": "common:269"
+    },
+    {
+      "frames": [
+        {
+          "common": 270,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:270"
+    },
+    {
+      "frames": [
+        {
+          "common": 271,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:271"
+    },
+    {
+      "frames": [
+        {
+          "common": 530,
+          "event": -1,
+          "map": 1,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:530"
+    }
+  ]
+}

@@ -14,7 +14,7 @@
 #include <stdexcept>
 #include <vector>
 #include <mutex>
-#define STB_IMAGE_IMPLEMENTATION
+#include <limits>
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #include <stb/stb_image.h>
@@ -53,6 +53,8 @@ std::vector<unsigned char> read_bytes(const fs::path& path) {
 struct Texture {
     SDL_Texture* value = nullptr;
     int width = 0, height = 0;
+    int logical_width = 0, logical_height = 0, border = 0;
+    std::string revision;
     ~Texture() { if (value) SDL_DestroyTexture(value); }
 };
 struct Assets {
@@ -62,15 +64,17 @@ struct Assets {
     TextRasterizer text;
     explicit Assets(fs::path path, SDL_Renderer* output, const Json& project) : resources(path.u8string()), renderer(output),
         text(path, project.at("game"), project.at("databases").at("system").at("types").at(12).at("rows")) {}
-    Texture& text_picture(const Json& picture) {
+    Texture& text_picture(const Json& picture, const std::string& cache_name = {}) {
         const auto key = std::string("text:") + picture.at("text_style").dump() + picture.at("content").get<std::string>();
-        auto& slot = textures[key];
-        if (!slot) {
+        auto& slot = textures[cache_name.empty() ? key : cache_name];
+        if (!slot || slot->revision != key) {
             auto pixels = text.render(picture.at("content"), picture.at("text_style"));
             SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(pixels.rgba.data(), pixels.width, pixels.height, 32, pixels.width * 4, SDL_PIXELFORMAT_RGBA32);
             if (!surface) throw std::runtime_error(SDL_GetError());
             auto texture = std::make_unique<Texture>(); texture->value = SDL_CreateTextureFromSurface(renderer, surface);
             texture->width = pixels.width; texture->height = pixels.height; SDL_FreeSurface(surface);
+            texture->logical_width = pixels.logical_width; texture->logical_height = pixels.logical_height; texture->border = pixels.border;
+            texture->revision = key;
             if (!texture->value) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
@@ -94,24 +98,49 @@ struct Assets {
         }
         return *slot;
     }
+    Texture& square() {
+        auto& slot = textures[":square"];
+        if (!slot) {
+            auto texture = std::make_unique<Texture>(); texture->width = texture->height = 1;
+            texture->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, 1, 1);
+            const unsigned char white[] = {255, 255, 255, 255};
+            if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, white, 4) != 0) throw std::runtime_error(SDL_GetError());
+            slot = std::move(texture);
+        }
+        return *slot;
+    }
 };
 
-void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures, std::uint64_t frame) {
+void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures, std::uint64_t frame,
+    int first_id = std::numeric_limits<int>::min(), int end_id = std::numeric_limits<int>::max()) {
     std::vector<const Json*> ordered;
     for (const auto& item : pictures) ordered.push_back(&item);
     std::sort(ordered.begin(), ordered.end(), [](const Json* a, const Json* b) { return a->at("id").get<int>() < b->at("id").get<int>(); });
     for (const Json* ptr : ordered) {
         const auto& p = *ptr;
+        if (p.at("id").get<int>() < first_id || p.at("id").get<int>() >= end_id) continue;
         const int kind = p.at("kind");
-        if (kind > 2) throw std::runtime_error("Picture window rendering is not implemented yet; picture " + std::to_string(p.at("id").get<int>()));
-        auto& texture = kind == 2 ? assets.text_picture(p) : assets.image(p.at("content"));
-        const int dx = p.at("div_x"), dy = p.at("div_y"), pattern = p.at("pattern");
-        if (dx < 1 || dy < 1 || pattern < 1 || pattern > dx * dy)
+        if (kind == -1) continue; // Empty record allocated by a delayed show.
+        if (kind > 4) throw std::runtime_error("Unsupported picture display type");
+        if ((p.at("blend") != 3 && p.at("opacity").get<int>() <= 0) || p.at("zoom") == 0 || p.at("zoom_y") == 0) continue;
+        const bool window = kind >= 3;
+        const std::string content = p.at("content");
+        const bool square = window && (content == "<SQUARE>" || content == "<SQUARE>FRAME");
+        auto& texture = square ? assets.square() : kind == 2 ? assets.text_picture(p, "$picture:" + std::to_string(p.at("id").get<int>())) : assets.image(content);
+        const int dx = p.at("div_x"), dy = p.at("div_y"), pattern = wolf::picture_pattern(p, frame);
+        if (dx < 1 || dy < 1 || (!window && (pattern < 1 || pattern > dx * dy)))
             throw std::runtime_error("Invalid picture sprite-sheet pattern");
-        const int width = texture.width / dx, height = texture.height / dy;
-        SDL_Rect source{((pattern - 1) % dx) * width, ((pattern - 1) / dx) * height, width, height};
+        const int width = window ? dx : kind == 2 ? texture.logical_width : texture.width / dx;
+        const int height = window ? dy : kind == 2 ? texture.logical_height : texture.height / dy;
+        SDL_Rect source{window ? 0 : ((pattern - 1) % dx) * width, window ? 0 : ((pattern - 1) / dx) * height,
+            window ? texture.width : width, window ? texture.height : height};
+        if (kind == 2) source = {0, 0, texture.width, texture.height};
         const float zoom = p.at("zoom").get<float>() / 100.f;
-        SDL_FRect destination{p.at("x"), p.at("y"), width * zoom, height * zoom};
+        const float zoom_y = p.at("angle") != 0 && !window ? zoom : p.at("zoom_y").get<float>() / 100.f;
+        if (zoom < 0 || zoom_y < 0) throw std::runtime_error("Flipped picture rendering is not implemented");
+        const int shift_x = p.contains("draw_shift") ? p.at("draw_shift").at("x").get<int>() : 0;
+        const int shift_y = p.contains("draw_shift") ? p.at("draw_shift").at("y").get<int>() : 0;
+        SDL_FRect destination{p.at("x").get<float>() + shift_x, p.at("y").get<float>() + shift_y, width * zoom, height * zoom_y};
         const int anchor = p.at("anchor");
         if (anchor == 1) { destination.x -= destination.w / 2; destination.y -= destination.h / 2; }
         else if (anchor == 2) destination.y -= destination.h;
@@ -120,6 +149,10 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         else if (anchor == 5) destination.x -= destination.w / 2;
         else if (anchor == 6) { destination.x -= destination.w / 2; destination.y -= destination.h; }
         else if (anchor != 0) throw std::runtime_error("Unsupported picture anchor");
+        if (kind == 2) {
+            destination.x -= texture.border * zoom; destination.y -= texture.border * zoom_y;
+            destination.w = texture.width * zoom; destination.h = texture.height * zoom_y;
+        }
         const int blend = p.at("blend");
         if (blend == 2 || blend > 3) throw std::runtime_error("Unsupported picture blend mode");
         if (SDL_SetTextureBlendMode(texture.value, blend == 1 ? SDL_BLENDMODE_ADD : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND) != 0)
@@ -129,10 +162,48 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         for (double component : tint) if (component > 100) throw std::runtime_error("Picture color brightening is not implemented");
         SDL_SetTextureColorMod(texture.value, static_cast<Uint8>(tint[0] * 255 / 100),
             static_cast<Uint8>(tint[1] * 255 / 100), static_cast<Uint8>(tint[2] * 255 / 100));
-        const SDL_FPoint pivot{p.at("x").get<float>() - destination.x, p.at("y").get<float>() - destination.y};
-        if (SDL_RenderCopyExF(renderer, texture.value, &source, &destination, p.at("angle").get<double>() / 10, &pivot, SDL_FLIP_NONE) != 0)
+        if (square && content == "<SQUARE>FRAME") {
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, static_cast<Uint8>(tint[0] * 255 / 100), static_cast<Uint8>(tint[1] * 255 / 100),
+                static_cast<Uint8>(tint[2] * 255 / 100), static_cast<Uint8>(std::clamp(p.at("opacity").get<int>(), 0, 255)));
+            if (SDL_RenderDrawRectF(renderer, &destination) != 0) throw std::runtime_error(SDL_GetError());
+            continue;
+        }
+        if (window && !square) {
+            if (texture.width % 3 || texture.height % 3) throw std::runtime_error("Window skin must divide into 3 by 3 cells");
+            const int cell_w = texture.width / 3, cell_h = texture.height / 3;
+            const float edge_w = cell_w * zoom, edge_h = cell_h * zoom_y;
+            if (destination.w < edge_w * 2 || destination.h < edge_h * 2)
+                throw std::runtime_error("Window is smaller than its corners: picture " + std::to_string(p.at("id").get<int>()) + " / " + content);
+            const float xs[] = {destination.x, destination.x + edge_w, destination.x + destination.w - edge_w};
+            const float ys[] = {destination.y, destination.y + edge_h, destination.y + destination.h - edge_h};
+            const float ws[] = {edge_w, destination.w - edge_w * 2, edge_w};
+            const float hs[] = {edge_h, destination.h - edge_h * 2, edge_h};
+            for (int row = 0; row < 3; ++row) for (int col = 0; col < 3; ++col) {
+                const SDL_Rect part{col * cell_w, row * cell_h, cell_w, cell_h};
+                const SDL_FRect area{xs[col], ys[row], ws[col], hs[row]};
+                if (SDL_RenderCopyF(renderer, texture.value, &part, &area) != 0) throw std::runtime_error(SDL_GetError());
+            }
+            continue;
+        }
+        const SDL_FPoint pivot{p.at("x").get<float>() + shift_x - destination.x, p.at("y").get<float>() + shift_y - destination.y};
+        if (SDL_RenderCopyExF(renderer, texture.value, &source, &destination, window ? 0 : p.at("angle").get<double>() / 10, &pivot, SDL_FLIP_NONE) != 0)
             throw std::runtime_error(SDL_GetError());
     }
+}
+
+void draw_message(SDL_Renderer* renderer, Assets& assets, const Json& message, int height) {
+    if (message.empty() || message.at("done") == true || message.at("visible") == 0) return;
+    auto style = message.at("style"); style["visible_chars"] = message.at("visible");
+    const Json picture = {{"content", message.at("content")}, {"text_style", style}};
+    auto& texture = assets.text_picture(picture, "$message");
+    const int x = message.at("x"), y = message.at("y");
+    SDL_FRect destination{static_cast<float>((x < 0 ? 8 : x) - texture.border),
+        static_cast<float>((y < 0 ? height - style.at("size").get<int>() * 4 - 16 : y) - texture.border),
+        static_cast<float>(texture.width), static_cast<float>(texture.height)};
+    SDL_SetTextureBlendMode(texture.value, SDL_BLENDMODE_BLEND); SDL_SetTextureAlphaMod(texture.value, 255);
+    SDL_SetTextureColorMod(texture.value, 255, 255, 255);
+    if (SDL_RenderCopyF(renderer, texture.value, nullptr, &destination) != 0) throw std::runtime_error(SDL_GetError());
 }
 
 bool in_button(int x, int y, int index, int width, int height) {
@@ -294,12 +365,10 @@ int main(int argc, char** argv) {
             if (steps >= 8) accumulator = 0;
             audio.pause(paused);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
-            draw_pictures(renderer, assets, runtime.pictures(), runtime.frame());
-            if (!runtime.choice().empty() && runtime.choice().at("done") == false) {
-                const auto& choice = runtime.choice();
-                const int y = choice.at("y");
-                if (y < height) throw std::runtime_error("Visible engine choice rendering is not implemented");
-            }
+            draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), std::numeric_limits<int>::min(), 100000);
+            draw_message(renderer, assets, runtime.message_state(), height);
+            draw_pictures(renderer, assets, runtime.choice_pictures(), runtime.frame());
+            draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), 100000);
             for (int i = 0; i < 7; ++i) {
                 SDL_Rect rect{i * width / 7 + 3, height + 3, width / 7 - 6, 58};
                 SDL_SetRenderDrawColor(renderer, 56, 56, 56, 255); SDL_RenderFillRect(renderer, &rect);
@@ -342,7 +411,8 @@ int main(int argc, char** argv) {
                 wolf::atomic_save((storage / "last-error.json").u8string(), diagnostic);
             } catch (...) { SDL_Log("Could not persist the error diagnostic"); }
         }
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Monochrome Port", error.what(), window); result = 2;
+        if (!SDL_getenv("WOLF_CAPTURE_BMP")) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Monochrome Port", error.what(), window);
+        result = 2;
     }
     if (controller) SDL_GameControllerClose(controller);
     if (renderer) SDL_DestroyRenderer(renderer);

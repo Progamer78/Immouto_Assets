@@ -1,0 +1,57 @@
+{
+  "native_scenarios": 39,
+  "python_tests_local": 14,
+  "debug_and_release_core_passed": true,
+  "windows_sdl_frontend_compiled": true,
+  "ios_cpp_paths_compiled_locally": true,
+  "captures": {
+    "opening_dialogue": {
+      "frame": 551,
+      "bmp_sha256": "d212bc4f946f7697d0f49705735544ce12e76185aa3aa9d4c2308e41523d1511",
+      "diagnostics": {
+        "context": {
+          "common": 530,
+          "event": -1,
+          "page": -1
+        },
+        "error": "",
+        "frame": 551,
+        "map": 1,
+        "message": {
+          "complete": true,
+          "done": false,
+          "total": 324,
+          "visible": 324,
+          "x": 0,
+          "y": 2000
+        },
+        "pictures": 7
+      }
+    },
+    "opening_choice": {
+      "frame": 1201,
+      "bmp_sha256": "db67151cfb50bf3a5759527c848de032cfab1e20f7b805413e3252eca1182b24",
+      "diagnostics": {
+        "context": {
+          "common": 530,
+          "event": -1,
+          "page": -1
+        },
+        "error": "",
+        "frame": 1201,
+        "map": 1,
+        "message": {},
+        "pictures": 13
+      }
+    }
+  },
+  "capture_method": "SDL dummy video/audio, restored successful headless state from the same native core, rendered the next tick. No iPhone test.",
+  "six_reference_text_widths_match": true,
+  "full_game_playable": false,
+  "device_tested": false,
+  "current_stop": {
+    "frame": 3161,
+    "code": 140,
+    "offset": 46566
+  }
+}

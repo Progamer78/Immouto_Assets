@@ -30,7 +30,7 @@ std::string Runtime::character_key(int target, Context context) {
     if (characters_.contains(key)) return key;
     for (const auto& event : current_map()->at("events")) {
         if (event.at("id") != target) continue;
-        auto state = character(event.at("x"), event.at("y"));
+        auto state = character(event.at("x").get<int>() * 2, event.at("y").get<int>() * 2);
         const auto& pages = event.at("pages");
         for (int p = static_cast<int>(pages.size()) - 1; p >= 0; --p) {
             const auto& page = pages.at(p);

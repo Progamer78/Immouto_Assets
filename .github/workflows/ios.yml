@@ -48,7 +48,7 @@ jobs:
             build/ios/CMakeFiles
           key: ios-sdl2-v2-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('CMakeLists.txt') }}
           restore-keys: |
-            ios-sdl2-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('CMakeLists.txt') }}
+            ios-sdl2-v2-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-
       - name: Download private game assets
         if: inputs.include_game
         env:
