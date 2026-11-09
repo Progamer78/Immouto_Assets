@@ -1,0 +1,18 @@
+{
+  "run_url": "https://github.com/Progamer78/Immouto_Assets/actions/runs/42585937560",
+  "release_url": "https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-1-1",
+  "source_commit": "8fa13c878317156ff6dd1928d3c3392abdc16ffa",
+  "result": "success",
+  "total_seconds": 241,
+  "job_seconds": 236,
+  "configure_seconds": 213,
+  "compile_seconds": 10,
+  "ipa_bytes": 555314,
+  "executable_bytes": 1520904,
+  "architecture": "ARM64",
+  "bundle_id": "com.local.monochromeport",
+  "minimum_ios": "15.0",
+  "signed": false,
+  "includes_game": false,
+  "device_tested": false
+}

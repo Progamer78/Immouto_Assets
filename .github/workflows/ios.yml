@@ -42,8 +42,13 @@ jobs:
       - name: Reuse compiled iOS dependencies
         uses: actions/cache@v4
         with:
-          path: build/ios/_deps
-          key: ios-sdl2-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('CMakeLists.txt') }}
+          path: |
+            build/ios/_deps
+            build/ios/CMakeCache.txt
+            build/ios/CMakeFiles
+          key: ios-sdl2-v2-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            ios-sdl2-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('CMakeLists.txt') }}
       - name: Download private game assets
         if: inputs.include_game
         env:
@@ -58,7 +63,8 @@ jobs:
           INCLUDE_GAME: ${{ inputs.include_game }}
           REUSE_ASSETS: ${{ inputs.reuse_assets }}
         run: |
-          game_args=()
+          # Clear a full build's cached path when creating a thin development build.
+          game_args=(-DWOLF_GAME_DIR=)
           if [ "$INCLUDE_GAME" = true ]; then game_args=(-DWOLF_GAME_DIR="$GITHUB_WORKSPACE/game-assets"); fi
           cmake -S . -B build/ios -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos \

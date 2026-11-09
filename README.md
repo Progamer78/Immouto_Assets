@@ -1,6 +1,6 @@
 # Monochrome native iOS port
 
-Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The complete game is not playable yet, and no iOS build or IPA has been produced.** See [PORT_STATUS.md](PORT_STATUS.md) for verified progress and the current startup blocker.
+Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The complete game is not playable yet.** Native checks pass on Windows, Linux and macOS. The first ARM64 iOS compilation check also passed and produced a 555 KB unsigned IPA without game assets. See [PORT_STATUS.md](PORT_STATUS.md) for verified progress and the current startup blocker.
 
 The supplied game files remain in their original directory. Git excludes the original game, generated game data, private asset archives, build outputs and signing material.
 
@@ -48,11 +48,13 @@ The iOS build runs on a GitHub-hosted macOS runner. You do not need a Mac.
 
 GitHub allows release attachments below 2 GiB each, which accommodates the supplied game. Source checks do not download the asset package; only manually requested full iOS builds do. The asset ZIP and resulting IPA stay outside Git history and Actions artifact storage. Small build metadata artifacts are retained for seven days. Private-repository compute usage depends on your GitHub plan; source checks and unsigned iOS builds work without Apple signing secrets.
 
-The workflow exists locally; there is no remote repository or successful Actions run yet. Do not upload the whole original folder through Git, and do not commit the asset ZIP or signing files.
+The source is connected to the private [Progamer78/Immouto_Assets repository](https://github.com/Progamer78/Immouto_Assets). The initial [native checks passed](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780). The game asset package has not been uploaded. Do not upload the whole original folder through Git, and do not commit the asset ZIP or signing files.
+
+The first [unsigned iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585937560) completed in 4 minutes 1 second, including setup, compilation, packaging and publication. Its [release](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-1-1) is a compilation-check artifact, not a playable game build. The downloaded IPA was checked for a valid ZIP, ARM64 executable, bundle identifier and iOS deployment target. Details are in [reports/ios_build_check.json](reports/ios_build_check.json).
 
 ## Fast development cycle
 
-Most interpreter fixes are built and tested on Windows first. The iOS workflow caches SDL source and compiled dependency objects with an Xcode-version/CMake key; it does not cache or download the 989 MB game package for source-only builds.
+Most interpreter fixes are built and tested on Windows first. The iOS workflow caches SDL source, compiled dependency objects and CMake configuration results with an Xcode-version/CMake key; it does not cache or download the 989 MB game package for source-only builds. Documentation-only pushes do not rerun desktop compilation, and a newer source push cancels superseded native checks.
 
 For repeated iPhone testing, install one full build with `include_game=true` and `reuse_assets=true`. On first launch it copies the versioned assets into app storage, displaying progress. Subsequent builds can use `include_game=false`, `reuse_assets=true`: they contain the runtime and reuse that installed data. Use the same app identifier/signing setup and **update the existing app without deleting its data**. If a sideloading method removes the app first, its data may need reinstalling too.
 

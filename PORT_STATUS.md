@@ -1,6 +1,6 @@
 # Native port status — 2026-11-09
 
-**In progress. The game is not playable yet. No IPA or successful GitHub Actions build exists.**
+**In progress. The game is not playable yet. Desktop GitHub Actions checks pass, and an unsigned ARM64 iOS compilation-check IPA has been built and inspected.**
 
 ## Confirmed source
 
@@ -50,6 +50,7 @@ Every unsupported command/layout stops and records its context; it is not silent
 - Native runtime: **7 passing scenarios** covering waits, branches/loops, independent self banks, state persistence, incompatible saves, unknown commands, database name lookup and full-install/thin-update asset reuse.
 - Windows native application and headless runtime compile using a workspace-local Zig/CMake/Ninja toolchain.
 - GitHub workflow syntax checked with checksum-verified actionlint 1.7.7.
+- First remote [native check run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780) passed: Windows, Linux and macOS core tests, plus macOS SDL frontend compilation. It completed in approximately 65 seconds including runner setup.
 - The real startup interpreter executes **743 command records**, then stops in common event **48** at command **201**, original CommonEvent.dat byte offset **114829**. See [reports/startup_trace.json](reports/startup_trace.json).
 - This is **before a verified title screen**. No original Windows gameplay session, native gameplay loop or iPhone test has been performed.
 
@@ -60,7 +61,10 @@ Every unsupported command/layout stops and records its context; it is not silent
 - Source is tracked separately from the approximately **989 MB** private game ZIP. Large asset packages and IPAs use private Release attachments, not Git history or Actions artifacts.
 - Full development install: `include_game=true`, `reuse_assets=true`. Later small updates: `include_game=false`, `reuse_assets=true`, preserving the existing app/data and identifier.
 - Standalone bundled mode: `include_game=true`, `reuse_assets=false`.
-- **No remote repository exists yet.** The user will create an empty private GitHub repository. No signing secrets are configured or embedded. Actual build durations are unknown until a first Actions run.
+- Source checkpoint `8fa13c8` is uploaded to the private [Progamer78/Immouto_Assets repository](https://github.com/Progamer78/Immouto_Assets), branch `master`. The asset ZIP remains local. No signing secrets are configured or embedded.
+- First unsigned, source-only [iOS run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585937560) passed in **241 seconds overall** (236 seconds for the job). Xcode/SDL configuration took 213 seconds; actual application compilation took 10 seconds. This is not a full-game or signed-build timing.
+- Produced and downloaded `Monochrome-unsigned.ipa`: **555,314 bytes**, ARM64 Mach-O executable, bundle ID `com.local.monochromeport`, minimum iOS 15.0. ZIP integrity and bundle/executable metadata verified; no game assets included and no device installation tested. See [reports/ios_build_check.json](reports/ios_build_check.json).
+- The private [release](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-1-1) contains this compilation-check IPA. Dependency caching worked; CMake-result caching was added after this baseline and needs a subsequent run to measure its effect.
 
 ## Next work
 
@@ -68,5 +72,5 @@ Every unsupported command/layout stops and records its context; it is not silent
 2. Establish a separate Windows reference copy/session and resolve loose/archive behavior.
 3. Implement picture variants, text/font escapes, messages/choices, database utilities, audio and remaining commands from the actual inventory.
 4. Validate the title flow, new game and a complete gameplay loop against Game.exe; add game-command save/load rather than relying on development snapshots.
-5. Run Actions after the private repository is connected; resolve Xcode/SDK issues, measure full/thin build times, and validate installation, updates, input, lifecycle, audio, memory and performance on iPhone.
+5. Validate the expanded CMake cache, measure full/thin build times, and validate signing, installation, updates, input, lifecycle, audio, memory and performance on iPhone.
 6. Extend compatibility testing across progression and endings. Old asset-cache versions and renderer texture-cache limits still need cleanup policies.

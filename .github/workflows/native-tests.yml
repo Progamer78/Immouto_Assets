@@ -1,8 +1,27 @@
 name: Native checks
 on:
   push:
+    paths:
+      - 'src/**'
+      - 'frontend/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'third_party/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/native-tests.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'frontend/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'third_party/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/native-tests.yml'
   workflow_dispatch:
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
