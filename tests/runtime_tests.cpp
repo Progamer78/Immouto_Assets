@@ -461,10 +461,12 @@ void delayed_se_dispatch_survives_restore() {
     loaded.tick(); REQUIRE(loaded.take_audio().empty());
 }
 void music_stop_preserves_kind_and_fade_duration() {
-    wolf::Runtime rt(project({cmd(140, {16776960, 100, 0, 0}), cmd(140, {16776976, 0, 0, 0})}));
+    for (const int base : {16776960, -256}) {
+    wolf::Runtime rt(project({cmd(140, {base, 100, 0, 0}), cmd(140, {base | 16, 0, 0, 0})}));
     rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); const auto audio = rt.take_audio();
     REQUIRE(audio.size() == 2); REQUIRE(audio.at(0).at("operation") == "stop"); REQUIRE(audio.at(0).at("kind") == 0);
     REQUIRE(audio.at(0).at("fade_ms") == 1666); REQUIRE(audio.at(1).at("kind") == 1); REQUIRE(audio.at(1).at("fade_ms") == 0);
+    }
 }
 void zero_sound_frequency_matches_windows_default() {
     wolf::Runtime rt(project({cmd(140, {33554432, 10, 0, 0, 70, 0, 0}, 0, {"BGM/sparrows.mp3"})}));

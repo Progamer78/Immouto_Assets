@@ -1024,7 +1024,8 @@ void Runtime::execute(Run& run, const Json& cmd) {
     case 122: string_operation(cmd, context); return;
     case 140: {
         const int kind = (arg(cmd, 0) >> 4) & 15;
-        if (kind <= 1 && arg(cmd, 0) == (0x00ffff00 | (kind << 4))) {
+        // Older game data also sign-extends the -1 database stop sentinel.
+        if (kind <= 1 && (arg(cmd, 0) == (0x00ffff00 | (kind << 4)) || arg(cmd, 0) == (-256 | (kind << 4)))) {
             if (cmd.at("args").size() != 4 || !cmd.at("strings").empty() || value(2) != 0 || value(3) != 0)
                 fail("Unsupported music-stop layout");
             audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1},

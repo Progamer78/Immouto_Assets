@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-09",
+  "scope": "First iPhone feedback fixes; new version not yet tested on a phone",
+  "local_checks": {
+    "debug_runtime_scenarios": 66,
+    "release_runtime_scenarios": 66,
+    "sdl_file_and_layout_tests": "pass",
+    "python_tests": 14
+  },
+  "interaction": {
+    "start_frame": 12650,
+    "end_frame": 13250,
+    "native_rendered_ticks": 600,
+    "error": "",
+    "missing_label": "Debugskip",
+    "behavior": "Missing label is a bounded diagnostic warning; original interaction menu opens",
+    "capture_sha256": "9d0d70aaa43931cdfd71496a293053d3aeb41cbcfd63a02774a1b14dc5103ab4"
+  },
+  "communication": {
+    "start_frame": 13250,
+    "end_frame": 14150,
+    "interpreter_ticks": 900,
+    "error": "",
+    "additional_fix": "Sign-extended BGS stop sentinel -240 preserves fade and clears playback metadata"
+  },
+  "normal_startup": {
+    "existing_gameplay_snapshot_frame": 12650,
+    "developer_resume": false,
+    "captured_frame": 80,
+    "map": 0,
+    "error": "",
+    "result": "Original title graphics and menu buttons; existing developer snapshot not restored",
+    "capture_sha256": "b88b1ab72431b3b4cc745746fb36d2aba5627c08d90f49dfce0d21c491af1ab3"
+  },
+  "dialogue": {
+    "start_frame": 6200,
+    "end_frame": 12200,
+    "error": "",
+    "reported_lines_checked_at_frames": [
+      7762,
+      8002
+    ],
+    "window_36000_anchor_both": 1,
+    "note": "Consecutive reported lines retain center anchor; no copyrighted narrative stored in this report"
+  },
+  "limits": [
+    "New safe-area behavior and native Menu need iPhone confirmation",
+    "Thin IPA update must preserve existing app Documents assets and saves",
+    "Whole-game compatibility remains incomplete"
+  ]
+}

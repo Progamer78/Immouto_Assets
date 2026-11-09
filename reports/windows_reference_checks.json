@@ -224,7 +224,7 @@
   },
   "text_widths": {
     "verified": true,
-    "font": "07やさしさゴシックボールド",
+    "font": "07\u3084\u3055\u3057\u3055\u30b4\u30b7\u30c3\u30af\u30dc\u30fc\u30eb\u30c9",
     "size": 20,
     "cases": [
       "TAB",
@@ -1316,5 +1316,84 @@
     "native_png_sha256": "09b93e769b921246b8aa97d1b5d5f7075a6215f7dd036f69a96fe3c7b3e9cd70",
     "behavior": "Fixed-size corners overlap; nonpositive middle pieces are omitted; later bottom pieces cover top pieces.",
     "limits": "Three exact fixture comparisons; not all skin, scaling or blend variants."
+  },
+  "missing_label": {
+    "method": "Supplied Game.exe in restored isolated fixture",
+    "result": "Absent label falls through and following screenshot command executes",
+    "reference_png_sha256": "3dfd5a96c7f34bc8469c78c0b26b6cd6b77687bf092dec3e1e5ee14410507940"
+  },
+  "picture_move_anchor": {
+    "method": "Supplied Game.exe in restored isolated fixture",
+    "cases": [
+      {
+        "show_anchor": 1,
+        "move_raw_anchor": 0,
+        "bounds": [
+          160,
+          160,
+          239,
+          199
+        ]
+      },
+      {
+        "show_anchor": 1,
+        "move_raw_anchor": 4,
+        "bounds": [
+          360,
+          160,
+          439,
+          199
+        ]
+      },
+      {
+        "show_anchor": 4,
+        "move_raw_anchor": 1,
+        "bounds": [
+          520,
+          140,
+          599,
+          179
+        ]
+      }
+    ],
+    "result": "Move preserves original Show anchor",
+    "reference_png_sha256": "4c549f348c51c5507dd745ee2b441189b27a9f93e2db2cdebc45d5a88f746203"
+  },
+  "group_picture_zoom": {
+    "method": "Supplied Game.exe in restored isolated fixture",
+    "percent": 150,
+    "center": [
+      200,
+      180
+    ],
+    "original_picture_size": [
+      80,
+      40
+    ],
+    "original_centers": [
+      [
+        200,
+        180
+      ],
+      [
+        300,
+        180
+      ]
+    ],
+    "bounds": [
+      [
+        140,
+        150,
+        259,
+        209
+      ],
+      [
+        290,
+        150,
+        409,
+        209
+      ]
+    ],
+    "reference_png_sha256": "80a598ebed635c8dcdfd31b95fe22b8e10ad61fe9f526739006a9fe6431119b1"
   }
 }
