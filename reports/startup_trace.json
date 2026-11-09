@@ -1,0 +1,59 @@
+{
+  "command": {
+    "args": [
+      -2
+    ],
+    "code": 201,
+    "indent": 0,
+    "offset": 114829,
+    "route": {
+      "commands": [
+        {
+          "args": [
+            3
+          ],
+          "code": 29,
+          "extra": [
+            0
+          ]
+        }
+      ],
+      "flags": [
+        3,
+        3,
+        3,
+        0,
+        3,
+        2
+      ]
+    },
+    "strings": []
+  },
+  "context": {
+    "common": 48,
+    "event": -1,
+    "page": -1
+  },
+  "error": "Unsupported command 201 at original byte offset 114829",
+  "executed": {
+    "0": 115,
+    "103": 253,
+    "111": 94,
+    "121": 99,
+    "124": 4,
+    "160": 1,
+    "172": 1,
+    "179": 9,
+    "180": 1,
+    "201": 1,
+    "250": 51,
+    "300": 38,
+    "401": 21,
+    "498": 23,
+    "499": 32
+  },
+  "frame": 0,
+  "map": 0,
+  "pictures": 0,
+  "project_id": "de10ab04e1fabc84"
+}

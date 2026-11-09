@@ -1,0 +1,14 @@
+/.reference/
+/.tools/
+/build*/
+/artifacts/
+/game-assets/
+/Living_With_SIster_Monochrome_Fantasy_Kagura_Decypted/
+/OriginalGame/
+__pycache__/
+*.pyc
+.DS_Store
+*.p12
+*.mobileprovision
+*.ipa
+*.xcarchive/

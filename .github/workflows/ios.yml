@@ -1,0 +1,151 @@
+name: Build iOS IPA
+on:
+  workflow_dispatch:
+    inputs:
+      include_game:
+        description: Include the private game-assets.zip release asset
+        type: boolean
+        default: false
+      assets_release_tag:
+        description: Private release containing game-assets.zip
+        type: string
+        default: game-assets
+      reuse_assets:
+        description: Reuse assets installed by a previous full build (small development updates)
+        type: boolean
+        default: true
+      signed:
+        description: Sign using configured Apple certificate and provisioning profile
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'com.local.monochromeport' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record build tools
+        id: toolchain
+        run: |
+          mkdir -p artifacts
+          xcodebuild -version | tee artifacts/build-tools.txt
+          cmake --version >> artifacts/build-tools.txt
+          git rev-parse HEAD >> artifacts/build-tools.txt
+          toolchain_key="$(cat artifacts/build-tools.txt | head -n 2 | shasum -a 256 | cut -d ' ' -f 1)"
+          echo "key=$toolchain_key" >> "$GITHUB_OUTPUT"
+      - name: Reuse compiled iOS dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/ios/_deps
+          key: ios-sdl2-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('CMakeLists.txt') }}
+      - name: Download private game assets
+        if: inputs.include_game
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.assets_release_tag }}
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern game-assets.zip --dir "$RUNNER_TEMP/game-download"
+          mkdir -p game-assets
+          python3 tools/extract_assets.py "$RUNNER_TEMP/game-download/game-assets.zip" game-assets
+      - name: Generate native ARM64 Xcode project
+        env:
+          INCLUDE_GAME: ${{ inputs.include_game }}
+          REUSE_ASSETS: ${{ inputs.reuse_assets }}
+        run: |
+          game_args=()
+          if [ "$INCLUDE_GAME" = true ]; then game_args=(-DWOLF_GAME_DIR="$GITHUB_WORKSPACE/game-assets"); fi
+          cmake -S . -B build/ios -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -DWOLF_BUNDLE_ID="$BUNDLE_ID" -DWOLF_BUILD_APP=ON \
+            -DWOLF_REUSE_GAME_ASSETS="$REUSE_ASSETS" "${game_args[@]}"
+      - name: Build unsigned device application
+        run: cmake --build build/ios --config Release --target WolfPort --parallel 4
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p artifacts/unsigned/Payload
+          ditto build/ios/Release-iphoneos/WolfPort.app artifacts/unsigned/Payload/WolfPort.app
+          cd artifacts/unsigned
+          zip -qr ../Monochrome-unsigned.ipa Payload
+          cd ../..
+          python3 -c "import shutil; shutil.rmtree('artifacts/unsigned')"
+      - name: Prepare signing credentials
+        if: inputs.signed
+        env:
+          CERTIFICATE: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          test -n "$CERTIFICATE" && test -n "$PROFILE" || { echo 'Apple signing certificate/profile secrets are missing'; exit 1; }
+          python3 - <<'PY'
+          import base64, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          (root / 'signing.p12').write_bytes(base64.b64decode(os.environ['CERTIFICATE'], validate=True))
+          (root / 'profile.mobileprovision').write_bytes(base64.b64decode(os.environ['PROFILE'], validate=True))
+          PY
+          keychain_password="$(openssl rand -base64 32)"
+          echo "::add-mask::$keychain_password"
+          echo "KEYCHAIN_PASSWORD=$keychain_password" >> "$GITHUB_ENV"
+          security create-keychain -p "$keychain_password" "$RUNNER_TEMP/ios-signing.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/ios-signing.keychain-db"
+          security unlock-keychain -p "$keychain_password" "$RUNNER_TEMP/ios-signing.keychain-db"
+          security import "$RUNNER_TEMP/signing.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$RUNNER_TEMP/ios-signing.keychain-db"
+          security list-keychains -d user -s "$RUNNER_TEMP/ios-signing.keychain-db"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$keychain_password" "$RUNNER_TEMP/ios-signing.keychain-db" >/dev/null
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          python3 tools/signing_options.py "$RUNNER_TEMP/profile.plist" "$RUNNER_TEMP/ExportOptions.plist" "$BUNDLE_ID"
+      - name: Archive and export signed IPA
+        if: inputs.signed
+        run: |
+          profile_uuid=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+          team_id=$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$RUNNER_TEMP/profile.plist")
+          signing_identity="$(security find-identity -v -p codesigning "$RUNNER_TEMP/ios-signing.keychain-db" | awk '/^[[:space:]]*[0-9]+\)/ {print $2; exit}')"
+          test -n "$signing_identity" || { echo 'No valid signing identity found in the imported certificate'; exit 1; }
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+          xcodebuild -project build/ios/MonochromePort.xcodeproj -scheme WolfPort -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Monochrome.xcarchive" \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$signing_identity" DEVELOPMENT_TEAM="$team_id" \
+            PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" archive
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Monochrome.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath artifacts/signed
+      - name: Publish IPA to a private release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ inputs.signed }}
+          INCLUDE_GAME: ${{ inputs.include_game }}
+        run: |
+          tag="ios-build-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+          python3 - <<'PY'
+          import os, pathlib
+          text = ('Native iOS development build. Runtime compatibility is incomplete; see PORT_STATUS.md.\n\n'
+                  f"Source commit: {os.environ['GITHUB_SHA']}\n"
+                  f"Game included: {os.environ['INCLUDE_GAME']}\n"
+                  f"Signing requested: {os.environ['SIGNED']}\n")
+          (pathlib.Path(os.environ['RUNNER_TEMP']) / 'build-release.md').write_text(text)
+          PY
+          if [ "$SIGNED" = true ]; then files=(artifacts/signed/*.ipa); else files=(artifacts/Monochrome-unsigned.ipa); fi
+          gh release create "$tag" "${files[@]}" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --prerelease --title "iOS development build $GITHUB_RUN_NUMBER" \
+            --notes-file "$RUNNER_TEMP/build-release.md"
+      - name: Upload small build metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monochrome-ios-${{ github.run_number }}
+          path: |
+            artifacts/*.txt
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove signing keychain
+        if: always() && inputs.signed
+        run: |
+          security delete-keychain "$RUNNER_TEMP/ios-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/profile.mobileprovision" "$RUNNER_TEMP/profile.plist"

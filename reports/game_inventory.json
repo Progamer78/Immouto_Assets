@@ -1,0 +1,1091 @@
+{
+  "game": {
+    "title": "Living with Sister: Monochrome Fantasy",
+    "subtitle": " + DLC v2.02",
+    "width": 1024,
+    "height": 576,
+    "fps": 60,
+    "tile_size": 16,
+    "fonts": [
+      "Pixelify Sans",
+      "07やさしさゴシックボールド",
+      "MS ゴシックc",
+      "MS Gothic"
+    ]
+  },
+  "common_events": 550,
+  "common_command_records": 167843,
+  "all_command_records": 205864,
+  "common_run_modes": {
+    "0": 442,
+    "2": 97,
+    "3": 10,
+    "1": 1
+  },
+  "commands": [
+    {
+      "id": 0,
+      "name": "Blank",
+      "common_count": 25298,
+      "map_count": 7122,
+      "total": 32420
+    },
+    {
+      "id": 99,
+      "name": "Checkpoint",
+      "common_count": 150,
+      "map_count": 3,
+      "total": 153
+    },
+    {
+      "id": 101,
+      "name": "Message",
+      "common_count": 12233,
+      "map_count": 1123,
+      "total": 13356
+    },
+    {
+      "id": 102,
+      "name": "Choices",
+      "common_count": 505,
+      "map_count": 60,
+      "total": 565
+    },
+    {
+      "id": 103,
+      "name": "Comment",
+      "common_count": 9780,
+      "map_count": 1480,
+      "total": 11260
+    },
+    {
+      "id": 104,
+      "name": "ForceMessageClose",
+      "common_count": 1,
+      "map_count": 8,
+      "total": 9
+    },
+    {
+      "id": 105,
+      "name": "ClearDebugText",
+      "common_count": 5,
+      "map_count": 1,
+      "total": 6
+    },
+    {
+      "id": 106,
+      "name": "DebugText",
+      "common_count": 77,
+      "map_count": 0,
+      "total": 77
+    },
+    {
+      "id": 107,
+      "name": "ClearText",
+      "common_count": 1,
+      "map_count": 0,
+      "total": 1
+    },
+    {
+      "id": 111,
+      "name": "NumberCondition",
+      "common_count": 10990,
+      "map_count": 3731,
+      "total": 14721
+    },
+    {
+      "id": 112,
+      "name": "StringCondition",
+      "common_count": 177,
+      "map_count": 21,
+      "total": 198
+    },
+    {
+      "id": 121,
+      "name": "SetVariable",
+      "common_count": 17503,
+      "map_count": 4919,
+      "total": 22422
+    },
+    {
+      "id": 122,
+      "name": "SetString",
+      "common_count": 1375,
+      "map_count": 49,
+      "total": 1424
+    },
+    {
+      "id": 123,
+      "name": "InputKey",
+      "common_count": 218,
+      "map_count": 175,
+      "total": 393
+    },
+    {
+      "id": 124,
+      "name": "SetVariableEx",
+      "common_count": 588,
+      "map_count": 474,
+      "total": 1062
+    },
+    {
+      "id": 125,
+      "name": "AutomaticInput",
+      "common_count": 98,
+      "map_count": 6,
+      "total": 104
+    },
+    {
+      "id": 126,
+      "name": "KeyPermission",
+      "common_count": 10,
+      "map_count": 22,
+      "total": 32
+    },
+    {
+      "id": 130,
+      "name": "Teleport",
+      "common_count": 1,
+      "map_count": 8,
+      "total": 9
+    },
+    {
+      "id": 140,
+      "name": "Sound",
+      "common_count": 1456,
+      "map_count": 244,
+      "total": 1700
+    },
+    {
+      "id": 150,
+      "name": "Picture",
+      "common_count": 17172,
+      "map_count": 3910,
+      "total": 21082
+    },
+    {
+      "id": 151,
+      "name": "ScreenColor",
+      "common_count": 0,
+      "map_count": 7,
+      "total": 7
+    },
+    {
+      "id": 160,
+      "name": "SetTransition",
+      "common_count": 1,
+      "map_count": 0,
+      "total": 1
+    },
+    {
+      "id": 161,
+      "name": "PrepareTransition",
+      "common_count": 0,
+      "map_count": 1,
+      "total": 1
+    },
+    {
+      "id": 162,
+      "name": "ExecuteTransition",
+      "common_count": 0,
+      "map_count": 1,
+      "total": 1
+    },
+    {
+      "id": 170,
+      "name": "Loop",
+      "common_count": 183,
+      "map_count": 3,
+      "total": 186
+    },
+    {
+      "id": 171,
+      "name": "BreakLoop",
+      "common_count": 114,
+      "map_count": 0,
+      "total": 114
+    },
+    {
+      "id": 172,
+      "name": "BreakEvent",
+      "common_count": 1324,
+      "map_count": 433,
+      "total": 1757
+    },
+    {
+      "id": 174,
+      "name": "ReturnToTitle",
+      "common_count": 13,
+      "map_count": 5,
+      "total": 18
+    },
+    {
+      "id": 175,
+      "name": "EndGame",
+      "common_count": 2,
+      "map_count": 0,
+      "total": 2
+    },
+    {
+      "id": 176,
+      "name": "ContinueLoop",
+      "common_count": 54,
+      "map_count": 0,
+      "total": 54
+    },
+    {
+      "id": 179,
+      "name": "LoopTimes",
+      "common_count": 1874,
+      "map_count": 34,
+      "total": 1908
+    },
+    {
+      "id": 180,
+      "name": "Wait",
+      "common_count": 4783,
+      "map_count": 643,
+      "total": 5426
+    },
+    {
+      "id": 201,
+      "name": "MoveRoute",
+      "common_count": 5,
+      "map_count": 73,
+      "total": 78
+    },
+    {
+      "id": 210,
+      "name": "CallEvent",
+      "common_count": 18737,
+      "map_count": 2016,
+      "total": 20753
+    },
+    {
+      "id": 211,
+      "name": "ReserveEvent",
+      "common_count": 4,
+      "map_count": 0,
+      "total": 4
+    },
+    {
+      "id": 212,
+      "name": "Label",
+      "common_count": 621,
+      "map_count": 65,
+      "total": 686
+    },
+    {
+      "id": 213,
+      "name": "JumpLabel",
+      "common_count": 1585,
+      "map_count": 300,
+      "total": 1885
+    },
+    {
+      "id": 220,
+      "name": "SaveLoad",
+      "common_count": 8,
+      "map_count": 2,
+      "total": 10
+    },
+    {
+      "id": 221,
+      "name": "LoadVariable",
+      "common_count": 16,
+      "map_count": 21,
+      "total": 37
+    },
+    {
+      "id": 222,
+      "name": "SaveVariable",
+      "common_count": 5,
+      "map_count": 0,
+      "total": 5
+    },
+    {
+      "id": 250,
+      "name": "Database",
+      "common_count": 2592,
+      "map_count": 71,
+      "total": 2663
+    },
+    {
+      "id": 270,
+      "name": "Party",
+      "common_count": 5,
+      "map_count": 2,
+      "total": 7
+    },
+    {
+      "id": 281,
+      "name": "SystemSettings",
+      "common_count": 3,
+      "map_count": 0,
+      "total": 3
+    },
+    {
+      "id": 290,
+      "name": "Effect",
+      "common_count": 668,
+      "map_count": 184,
+      "total": 852
+    },
+    {
+      "id": 300,
+      "name": "CallCommonByName",
+      "common_count": 1164,
+      "map_count": 6,
+      "total": 1170
+    },
+    {
+      "id": 401,
+      "name": "Case",
+      "common_count": 19199,
+      "map_count": 5618,
+      "total": 24817
+    },
+    {
+      "id": 420,
+      "name": "Else",
+      "common_count": 3335,
+      "map_count": 1287,
+      "total": 4622
+    },
+    {
+      "id": 421,
+      "name": "Cancel",
+      "common_count": 157,
+      "map_count": 44,
+      "total": 201
+    },
+    {
+      "id": 498,
+      "name": "LoopEnd",
+      "common_count": 2057,
+      "map_count": 37,
+      "total": 2094
+    },
+    {
+      "id": 499,
+      "name": "BranchEnd",
+      "common_count": 11672,
+      "map_count": 3812,
+      "total": 15484
+    },
+    {
+      "id": 1000,
+      "name": "Screenshot",
+      "common_count": 24,
+      "map_count": 0,
+      "total": 24
+    }
+  ],
+  "maps": [
+    {
+      "file": "MapData/Dungeon.mps",
+      "width": 40,
+      "height": 30,
+      "events": 5,
+      "pages": 6
+    },
+    {
+      "file": "MapData/Map002.mps",
+      "width": 100,
+      "height": 30,
+      "events": 5,
+      "pages": 7
+    },
+    {
+      "file": "MapData/Map003.mps",
+      "width": 70,
+      "height": 170,
+      "events": 3,
+      "pages": 3
+    },
+    {
+      "file": "MapData/Map024.mps",
+      "width": 53,
+      "height": 30,
+      "events": 1,
+      "pages": 1
+    },
+    {
+      "file": "MapData/Map031.mps",
+      "width": 53,
+      "height": 30,
+      "events": 1,
+      "pages": 1
+    },
+    {
+      "file": "MapData/SampleMapA.mps",
+      "width": 64,
+      "height": 36,
+      "events": 41,
+      "pages": 94
+    },
+    {
+      "file": "MapData/SampleMapA_1.mps",
+      "width": 64,
+      "height": 36,
+      "events": 12,
+      "pages": 17
+    },
+    {
+      "file": "MapData/SampleMapB.mps",
+      "width": 30,
+      "height": 30,
+      "events": 6,
+      "pages": 6
+    },
+    {
+      "file": "MapData/TitleMap.mps",
+      "width": 53,
+      "height": 30,
+      "events": 1,
+      "pages": 1
+    }
+  ],
+  "databases": {
+    "user": [
+      {
+        "id": 0,
+        "name": "技能",
+        "rows": 44,
+        "fields": 18
+      },
+      {
+        "id": 1,
+        "name": "┗ アニメーション",
+        "rows": 34,
+        "fields": 15
+      },
+      {
+        "id": 2,
+        "name": "アイテム",
+        "rows": 40,
+        "fields": 21
+      },
+      {
+        "id": 3,
+        "name": "武器",
+        "rows": 40,
+        "fields": 35
+      },
+      {
+        "id": 4,
+        "name": "防具",
+        "rows": 40,
+        "fields": 40
+      },
+      {
+        "id": 5,
+        "name": "┗装備タイプ",
+        "rows": 25,
+        "fields": 1
+      },
+      {
+        "id": 6,
+        "name": "戦闘コマンド",
+        "rows": 19,
+        "fields": 4
+      },
+      {
+        "id": 7,
+        "name": "属性名の設定",
+        "rows": 10,
+        "fields": 1
+      },
+      {
+        "id": 8,
+        "name": "状態設定",
+        "rows": 24,
+        "fields": 16
+      },
+      {
+        "id": 9,
+        "name": "敵ｷｬﾗ個体ﾃﾞｰﾀ",
+        "rows": 100,
+        "fields": 9
+      },
+      {
+        "id": 10,
+        "name": "┣ 敵行動AI",
+        "rows": 40,
+        "fields": 48
+      },
+      {
+        "id": 11,
+        "name": "┣ 属性耐性",
+        "rows": 42,
+        "fields": 100
+      },
+      {
+        "id": 12,
+        "name": "┗ 状態耐性",
+        "rows": 40,
+        "fields": 100
+      },
+      {
+        "id": 13,
+        "name": "敵グループ",
+        "rows": 41,
+        "fields": 12
+      },
+      {
+        "id": 14,
+        "name": "------------------------",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 15,
+        "name": "用語設定",
+        "rows": 1,
+        "fields": 32
+      },
+      {
+        "id": 16,
+        "name": "画像/音声設定",
+        "rows": 1,
+        "fields": 21
+      },
+      {
+        "id": 17,
+        "name": "システム設定",
+        "rows": 1,
+        "fields": 35
+      },
+      {
+        "id": 18,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 19,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 20,
+        "name": "◇吹き出しアイコン",
+        "rows": 11,
+        "fields": 4
+      },
+      {
+        "id": 21,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 22,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 23,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 24,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 25,
+        "name": "ランダム肩書",
+        "rows": 22,
+        "fields": 21
+      },
+      {
+        "id": 26,
+        "name": "メッセージウィンドウ種類",
+        "rows": 9,
+        "fields": 35
+      },
+      {
+        "id": 27,
+        "name": "探索ふきだし",
+        "rows": 20,
+        "fields": 5
+      },
+      {
+        "id": 28,
+        "name": "目標テキスト",
+        "rows": 101,
+        "fields": 2
+      },
+      {
+        "id": 29,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 30,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 31,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 32,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 33,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 34,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 35,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 36,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 37,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 38,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 39,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      }
+    ],
+    "mutable": [
+      {
+        "id": 0,
+        "name": "主人公ステータス",
+        "rows": 17,
+        "fields": 51
+      },
+      {
+        "id": 1,
+        "name": "┣ 技能習得Lv",
+        "rows": 16,
+        "fields": 100
+      },
+      {
+        "id": 2,
+        "name": "┣ 主人公行動AI",
+        "rows": 22,
+        "fields": 48
+      },
+      {
+        "id": 3,
+        "name": "┣ 属性耐性",
+        "rows": 40,
+        "fields": 100
+      },
+      {
+        "id": 4,
+        "name": "┣ 状態耐性",
+        "rows": 16,
+        "fields": 100
+      },
+      {
+        "id": 5,
+        "name": "┗ 状態リスト",
+        "rows": 16,
+        "fields": 100
+      },
+      {
+        "id": 6,
+        "name": "パーティー情報",
+        "rows": 1,
+        "fields": 7
+      },
+      {
+        "id": 7,
+        "name": "┣所持アイテム個数",
+        "rows": 40,
+        "fields": 1
+      },
+      {
+        "id": 8,
+        "name": "┣所持武器個数",
+        "rows": 10,
+        "fields": 1
+      },
+      {
+        "id": 9,
+        "name": "┗所持防具個数",
+        "rows": 10,
+        "fields": 1
+      },
+      {
+        "id": 10,
+        "name": "戦闘時一時ステータス",
+        "rows": 40,
+        "fields": 16
+      },
+      {
+        "id": 11,
+        "name": "×┣ 属性耐性計算結果",
+        "rows": 11,
+        "fields": 100
+      },
+      {
+        "id": 12,
+        "name": "×┣ 状態耐性計算結果",
+        "rows": 11,
+        "fields": 100
+      },
+      {
+        "id": 13,
+        "name": "×┣ 状態リスト",
+        "rows": 11,
+        "fields": 100
+      },
+      {
+        "id": 14,
+        "name": "×┣ コマンド処理ﾘｽﾄ",
+        "rows": 100,
+        "fields": 4
+      },
+      {
+        "id": 15,
+        "name": "×┗ お宝リスト",
+        "rows": 1,
+        "fields": 60
+      },
+      {
+        "id": 16,
+        "name": "× お店一時処理用",
+        "rows": 15,
+        "fields": 14
+      },
+      {
+        "id": 17,
+        "name": "×主人公一時DB",
+        "rows": 20,
+        "fields": 21
+      },
+      {
+        "id": 18,
+        "name": "基本ｼｽﾃﾑ用変数",
+        "rows": 100,
+        "fields": 2
+      },
+      {
+        "id": 19,
+        "name": "万能ｳｨﾝﾄﾞｳ一時DB",
+        "rows": 200,
+        "fields": 11
+      },
+      {
+        "id": 20,
+        "name": "×ドロップアイテムリスト",
+        "rows": 1,
+        "fields": 6
+      },
+      {
+        "id": 21,
+        "name": "メンバー情報",
+        "rows": 17,
+        "fields": 9
+      },
+      {
+        "id": 22,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 23,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 24,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 25,
+        "name": "追加キーコンフィグ設定",
+        "rows": 1,
+        "fields": 9
+      },
+      {
+        "id": 26,
+        "name": "",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 27,
+        "name": "カスタム選択肢",
+        "rows": 1,
+        "fields": 6
+      },
+      {
+        "id": 28,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 29,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      }
+    ],
+    "system": [
+      {
+        "id": 0,
+        "name": "マップ設定",
+        "rows": 50,
+        "fields": 8
+      },
+      {
+        "id": 1,
+        "name": "BGMリスト",
+        "rows": 16,
+        "fields": 4
+      },
+      {
+        "id": 2,
+        "name": "BGSリスト",
+        "rows": 6,
+        "fields": 4
+      },
+      {
+        "id": 3,
+        "name": "SEリスト",
+        "rows": 20,
+        "fields": 4
+      },
+      {
+        "id": 4,
+        "name": "文字列変数名",
+        "rows": 30,
+        "fields": 0
+      },
+      {
+        "id": 5,
+        "name": "システム文字列",
+        "rows": 80,
+        "fields": 0
+      },
+      {
+        "id": 6,
+        "name": "システム変数名",
+        "rows": 150,
+        "fields": 0
+      },
+      {
+        "id": 7,
+        "name": "位置設定リスト",
+        "rows": 10,
+        "fields": 3
+      },
+      {
+        "id": 8,
+        "name": "キャラクター画像",
+        "rows": 300,
+        "fields": 1
+      },
+      {
+        "id": 9,
+        "name": "ｷｬﾗ影ｸﾞﾗﾌｨｯｸ名",
+        "rows": 6,
+        "fields": 1
+      },
+      {
+        "id": 10,
+        "name": "ウィンドウ画像",
+        "rows": 3,
+        "fields": 2
+      },
+      {
+        "id": 11,
+        "name": "ﾄﾗﾝｼﾞｼｮﾝﾀｲﾌﾟ",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 12,
+        "name": "文字色",
+        "rows": 30,
+        "fields": 3
+      },
+      {
+        "id": 13,
+        "name": "遠景画像",
+        "rows": 80,
+        "fields": 4
+      },
+      {
+        "id": 14,
+        "name": "通常変数名",
+        "rows": 800,
+        "fields": 0
+      },
+      {
+        "id": 15,
+        "name": "予備変数1",
+        "rows": 4,
+        "fields": 0
+      },
+      {
+        "id": 16,
+        "name": "予備変数2",
+        "rows": 7,
+        "fields": 0
+      },
+      {
+        "id": 17,
+        "name": "予備変数3",
+        "rows": 4,
+        "fields": 0
+      },
+      {
+        "id": 18,
+        "name": "予備変数4",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 19,
+        "name": "予備変数5",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 20,
+        "name": "予備変数6",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 21,
+        "name": "予備変数7",
+        "rows": 6,
+        "fields": 0
+      },
+      {
+        "id": 22,
+        "name": "予備変数8",
+        "rows": 1,
+        "fields": 0
+      },
+      {
+        "id": 23,
+        "name": "予備変数9",
+        "rows": 10,
+        "fields": 0
+      },
+      {
+        "id": 24,
+        "name": "顔グラフィック名",
+        "rows": 12,
+        "fields": 1
+      },
+      {
+        "id": 25,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 26,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      },
+      {
+        "id": 27,
+        "name": "",
+        "rows": 1,
+        "fields": 1
+      }
+    ]
+  },
+  "tilesets": 6,
+  "file_count": 26495,
+  "bytes": 1178090437,
+  "extensions": {
+    "": 1,
+    ".bat": 2,
+    ".dat": 10,
+    ".dll": 1,
+    ".exe": 4,
+    ".exe_laa_bak": 1,
+    ".html": 1,
+    ".ico": 1,
+    ".ini": 1,
+    ".jpg": 1422,
+    ".json": 1,
+    ".mp3": 177,
+    ".mps": 9,
+    ".ogg": 164,
+    ".png": 5136,
+    ".project": 4,
+    ".sav": 14,
+    ".ttf": 5,
+    ".txt": 19506,
+    ".vdf": 3,
+    ".wav": 29,
+    ".wolf": 2,
+    ".xxxxx": 1
+  },
+  "source_sha256": {
+    "Data/BasicData/Game.dat": "459701863ff222d7a8b0bc8f9c83a7087ec0a141e890e4dd7f41f9bdaab54910",
+    "Data/BasicData/CommonEvent.dat": "53ea9d20294dfc572429c52428d022928607ba628e5096e2a3a0efe289f392d4",
+    "Data/BasicData/DataBase.dat": "75aff42103b5f9b204352a99ffa07bfdbfb25d73e6500003d7f8b80bf8cd1ee8",
+    "Data/BasicData/CDataBase.dat": "1308e82381eeaf498a457dfb1b4b20ab73d5359189cd06855c62fedb0bcb1863",
+    "Data/BasicData/SysDatabase.dat": "1f1b6b2ed31a945c9590c6c2eb7dc6aec3a147aa8d533edba71f9ff4be4c38d2",
+    "Data/BasicData/TileSetData.dat": "16173a0c24d7d7ce9e1009be28051647a2865b639054f8ee8709bb62f06d17c1",
+    "Data/MapData/Dungeon.mps": "e0b9f74fef18205fc3376fb9a66c99c4958485f65dd250a9888f9923d0bc6957",
+    "Data/MapData/Map002.mps": "158bb21680e2e6f7914c3a03c8bc22d62cd2fa8eea12178c4ae54c83ad38adf7",
+    "Data/MapData/Map003.mps": "44221f96069b32888e216b58a5dd8a7d7beffc4ad58afa38273fb0ab26605ce9",
+    "Data/MapData/Map024.mps": "3b14c47b94162726cac5d5f853173fe0fa76906681df216fdef5945d5ffc30d5",
+    "Data/MapData/Map031.mps": "1b1c52f57a340694e23dfefce83fbc5aaed157b8af35a0f0852b96b351d09c86",
+    "Data/MapData/SampleMapA.mps": "a28d30576475a7252b5b8d7b428ccc4281965a927afd0a7f6f061f7e35560f80",
+    "Data/MapData/SampleMapA_1.mps": "4354e920423b2708af8d260209ededa757c2c84db2ca0d818622fe1b5790e454",
+    "Data/MapData/SampleMapB.mps": "53bc88e60f21a238a4621aa80b2855439e2f2a22b3f2fa1184397bba0f94c3f1",
+    "Data/MapData/TitleMap.mps": "0fc65032e31e7c6dfa9a822ced81a4c8081320fd283b63368642afd86b3774b1"
+  },
+  "resource_policy": "Loose data selected explicitly; equivalence with bundled archives is not yet verified."
+}

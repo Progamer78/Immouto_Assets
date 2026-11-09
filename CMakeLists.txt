@@ -1,0 +1,76 @@
+cmake_minimum_required(VERSION 3.24)
+project(MonochromePort VERSION 0.1.0 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(WOLF_BUILD_APP "Build the SDL native application" ON)
+option(WOLF_REUSE_GAME_ASSETS "Keep game assets across small iOS development app updates" ON)
+set(WOLF_GAME_DIR "" CACHE PATH "Converted game directory produced by tools/prepare_game.py --stage")
+set(WOLF_BUNDLE_ID "com.local.monochromeport" CACHE STRING "iOS bundle identifier")
+
+add_library(wolf_core STATIC src/runtime.cpp src/persistence.cpp src/asset_cache.cpp)
+target_include_directories(wolf_core PUBLIC src third_party)
+if(MSVC)
+    target_compile_options(wolf_core PRIVATE /W4 /utf-8)
+else()
+    target_compile_options(wolf_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_executable(wolf-headless src/headless.cpp)
+    target_link_libraries(wolf-headless PRIVATE wolf_core)
+    include(CTest)
+    if(BUILD_TESTING)
+        add_executable(wolf-tests tests/runtime_tests.cpp)
+        target_link_libraries(wolf-tests PRIVATE wolf_core)
+        add_test(NAME native-runtime COMMAND wolf-tests)
+    endif()
+endif()
+
+if(WOLF_BUILD_APP)
+    include(FetchContent)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(SDL2 GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG 5d249570393f7a37e037abf22cd6012a4cc56a71 GIT_SHALLOW FALSE)
+    FetchContent_MakeAvailable(SDL2)
+    add_executable(WolfPort MACOSX_BUNDLE frontend/main.cpp frontend/crash_log.cpp)
+    target_link_libraries(WolfPort PRIVATE wolf_core)
+    if(WIN32)
+        target_compile_definitions(WolfPort PRIVATE SDL_MAIN_HANDLED)
+    elseif(TARGET SDL2::SDL2main)
+        target_link_libraries(WolfPort PRIVATE SDL2::SDL2main)
+    endif()
+    target_link_libraries(WolfPort PRIVATE SDL2::SDL2-static)
+    if(BUILD_TESTING AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        # Compile the iOS-specific C++ paths on the desktop before waiting for Xcode.
+        # The small Foundation bridge still requires the actual iOS SDK in Actions.
+        add_library(wolf-ios-frontend-check OBJECT frontend/main.cpp)
+        target_compile_definitions(wolf-ios-frontend-check PRIVATE SDL_MAIN_HANDLED WOLF_IOS=1 WOLF_PERSIST_ASSETS=1)
+        target_link_libraries(wolf-ios-frontend-check PRIVATE wolf_core SDL2::SDL2-static)
+    endif()
+    if(WOLF_GAME_DIR)
+        if(NOT EXISTS "${WOLF_GAME_DIR}/game.json")
+            message(FATAL_ERROR "WOLF_GAME_DIR must contain game.json. Run tools/prepare_game.py --stage first.")
+        endif()
+        add_custom_command(TARGET WolfPort POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${WOLF_GAME_DIR}" "$<TARGET_FILE_DIR:WolfPort>/game")
+    endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        enable_language(OBJCXX)
+        target_sources(WolfPort PRIVATE frontend/ios_paths.mm)
+        target_compile_definitions(WolfPort PRIVATE WOLF_IOS=1)
+        if(WOLF_REUSE_GAME_ASSETS)
+            target_compile_definitions(WolfPort PRIVATE WOLF_PERSIST_ASSETS=1)
+        endif()
+        set_target_properties(WolfPort PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist.in"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "${WOLF_BUNDLE_ID}"
+            XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${WOLF_BUNDLE_ID}"
+            XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+            XCODE_ATTRIBUTE_SKIP_INSTALL "NO"
+            XCODE_ATTRIBUTE_INSTALL_PATH "$(LOCAL_APPS_DIR)"
+            XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+            XCODE_ATTRIBUTE_ENABLE_BITCODE "NO")
+    endif()
+endif()
