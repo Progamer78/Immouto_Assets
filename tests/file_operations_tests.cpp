@@ -1,5 +1,6 @@
 #include "file_operations.hpp"
 #include "window.hpp"
+#include "presentation.hpp"
 #include <stb/stb_image.h>
 #include <chrono>
 #include <fstream>
@@ -11,6 +12,13 @@ int main() {
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* target = nullptr;
     try {
+        const auto safe = presentation::fit(2796, 1290, 1024, 656, {132, 0, 132, 63});
+        if (safe.x < 132 || safe.x + safe.w > 2664 || safe.y < 0 || safe.y + safe.h > 1227.01f)
+            throw std::runtime_error("iPhone presentation overlaps a notch or home gesture area");
+        const int menu_x = presentation::coordinate(safe.x + safe.w * 15 / 16, safe.x, safe.w, 1024);
+        const int menu_y = presentation::coordinate(safe.y + safe.h * 616 / 656, safe.y, safe.h, 656);
+        if (!presentation::button(menu_x, menu_y, 7, 1024, 576) || presentation::button(menu_x, 700, 7, 1024, 576))
+            throw std::runtime_error("Safe-area touch mapping does not reach Menu correctly");
         if (SDL_Init(SDL_INIT_VIDEO) != 0) throw std::runtime_error(SDL_GetError());
         window = SDL_CreateWindow("Screenshot test", 0, 0, 64, 56, SDL_WINDOW_HIDDEN);
         if (!window) throw std::runtime_error(SDL_GetError());

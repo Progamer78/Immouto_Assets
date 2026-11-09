@@ -1,6 +1,6 @@
 # Monochrome native iOS port
 
-Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The complete game is not playable yet.** The original home/save/restart/load path passes locally, and its ARM64 iOS compilation check produced a 996 KB unsigned IPA without game assets in 44 seconds. Broader gameplay and iPhone installation remain unverified. See [PORT_STATUS.md](PORT_STATUS.md) for verified progress and remaining blockers.
+Work in progress: this is the native runtime project for the game specified in [TASK.md](TASK.md). **The user has installed the full IPA and played on an iPhone. The complete game remains unfinished.** Opening, home, native save/load, Training and Reading pass locally. The first device feedback identified interaction, dialogue alignment, launch and touch-control issues; fixes now pass local checks. See [PORT_STATUS.md](PORT_STATUS.md) for evidence and remaining limitations.
 
 The supplied game files remain in their original directory. Git excludes the original game, generated game data, private asset archives, build outputs and signing material.
 
@@ -50,13 +50,15 @@ The iOS build runs on a GitHub-hosted macOS runner. You do not need a Mac.
 
 GitHub allows release attachments below 2 GiB each, which accommodates the supplied game. Source checks do not download the asset package; only manually requested full iOS builds do. The asset ZIP and resulting IPA stay outside Git history and Actions artifact storage. Small build metadata artifacts are retained for seven days. Private-repository compute usage depends on your GitHub plan; source checks and unsigned iOS builds work without Apple signing secrets.
 
-The source is connected to the private [Progamer78/Immouto_Assets repository](https://github.com/Progamer78/Immouto_Assets). The initial [native checks passed](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780). The game asset package has not been uploaded. Do not upload the whole original folder through Git, and do not commit the asset ZIP or signing files.
+The source is connected to the private [Progamer78/Immouto_Assets repository](https://github.com/Progamer78/Immouto_Assets). The approved game package is uploaded as a [private release attachment](https://github.com/Progamer78/Immouto_Assets/releases/tag/game-assets), with its remote SHA-256 verified. Do not upload the whole original folder through Git, and do not commit the asset ZIP or signing files.
 
 The first [unsigned iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585937560) completed in 4 minutes 1 second, including setup, compilation, packaging and publication. Its [release](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-1-1) is a compilation-check artifact, not a playable game build. The downloaded IPA was checked for a valid ZIP, ARM64 executable, bundle identifier and iOS deployment target. Details are in [reports/ios_build_check.json](reports/ios_build_check.json).
 
 The opening-runtime [iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42634139411) for `59133fc` passed in **48 seconds overall**, with 6 seconds of configuration and 17 seconds of compilation. Its [958 KB unsigned IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-3-1) was downloaded and checked for ZIP integrity, digest and ARM64 metadata. These timings exclude game assets and signing; that build predates the later arithmetic-range/shake fixes and does not validate device gameplay.
 
 The home/save/load [iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42678866407) for `c6bbbcf` passed in **44 seconds overall**, including 5 seconds of configuration and 18 seconds of compilation. The [995,640-byte unsigned IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-4-1) passed ZIP/digest and ARM64 metadata verification. It contains no game assets and has not been installed on an iPhone.
+
+The first **[full asset IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-5-1)** for `a399fb9` built successfully in **2 minutes 45 seconds**, including asset download, compilation, packaging and publication. Download `Monochrome-unsigned.ipa` (about 1 GB), then follow [the Windows installation guide](docs/IPHONE_INSTALL.md). This development build includes the original game assets but is unsigned; the user confirmed installation and gameplay on an iPhone, with compatibility and interface problems now under repair.
 
 ## Fast development cycle
 

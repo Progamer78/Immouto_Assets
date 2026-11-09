@@ -62,6 +62,7 @@ public:
     std::string expand(std::string value, Context context);
     Json snapshot() const;
     void restore(const Json& state);
+    void return_to_title();
     Json diagnostics() const;
 
     const Json& project() const { return *project_; }
@@ -114,6 +115,7 @@ private:
     bool mouse_enabled_ = true;
     int pending_auto_input_ = 0;
     std::string error_, message_;
+    Json warnings_ = Json::array();
     std::string project_id_;
     std::string save_root_;
     std::string asset_root_;
@@ -177,6 +179,7 @@ Json load_json(const std::string& filename);
 void atomic_save(const std::string& filename, const Json& state);
 void atomic_write(const std::string& filename, const std::string& bytes);
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame);
+std::array<double, 3> picture_group_zoom(const Json& picture, std::uint64_t frame);
 int picture_pattern(const Json& picture, std::uint64_t frame);
 std::pair<std::int64_t, std::int64_t> picture_draw_offset(const Json& picture, std::uint64_t frame);
 }

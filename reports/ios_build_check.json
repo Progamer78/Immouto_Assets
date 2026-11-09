@@ -101,5 +101,42 @@
       "Post Run actions/checkout@v4": 1.0,
       "Complete job": 0.0
     }
+  },
+  "full_game_development_build": {
+    "run": "https://github.com/Progamer78/Immouto_Assets/actions/runs/42683523069",
+    "head_sha": "a399fb91d2da2f7bbb6970f63697819d44a37824",
+    "release": "https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-5-1",
+    "bytes": 1005677313,
+    "sha256": "4b38e219a48ba1992cd1e47dd8cc3040f6159ccbda5a2143c365eeea3ce3e41e",
+    "arm64_verified": true,
+    "zip_crc_verified": true,
+    "game_json_sha256_verified": true,
+    "manifest_content_id": "64cc0e7d137768ffcd4190f36201d570646a58682d246626c6bc647b0e59c7b8",
+    "game_resource_files": 26403,
+    "bundle_id": "com.local.monochromeport",
+    "minimum_ios": "15.0",
+    "game_assets_included": true,
+    "signed": false,
+    "device_tested": true,
+    "run_seconds": 165.0,
+    "steps_seconds": {
+      "Set up job": 1.0,
+      "Run actions/checkout@v4": 2.0,
+      "Record build tools": 0.0,
+      "Reuse compiled iOS dependencies": 3.0,
+      "Download private game assets": 29.0,
+      "Generate native ARM64 Xcode project": 6.0,
+      "Build unsigned device application": 27.0,
+      "Package unsigned IPA": 51.0,
+      "Publish IPA to a private release": 36.0,
+      "Upload small build metadata": 2.0,
+      "Post Reuse compiled iOS dependencies": 0.0,
+      "Post Run actions/checkout@v4": 0.0,
+      "Complete job": 1.0
+    },
+    "device_feedback": {
+      "source": "User report and screenshots",
+      "result": "Installs and runs; command 105, absent Debugskip label, home-indicator overlap, title startup and dialogue alignment defects reported"
+    }
   }
 }

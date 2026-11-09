@@ -1,10 +1,10 @@
 # Install the iPhone test build from Windows
 
-This is an early native test build. Opening, home, save/load, Training and Reading pass locally. It has not been tested on an iPhone, and the full game is unfinished. Requires iOS 15 or later.
+This is an early native test build. Opening, home, save/load, Training and Reading pass locally. The user confirmed that the full IPA runs on an iPhone; the complete game is unfinished. Requires iOS 15 or later.
 
 ## Download the IPA
 
-Sign into the GitHub account with access to [the private repository's Releases](https://github.com/Progamer78/Immouto_Assets/releases). Download `Monochrome-unsigned.ipa` from the **full-game build** linked here once packaging finishes. The older approximately 1 MB files contain no game assets and cannot start the game on their own.
+Sign into the GitHub account with access to your private repository. Open **[iOS development build 5 — includes the game](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-5-1)** and download **`Monochrome-unsigned.ipa`** under Assets. It is **1,005,677,313 bytes (about 1 GB)**. The older approximately 1 MB files contain no game assets and cannot start the game on their own.
 
 ## Sign and install on Windows
 
@@ -18,6 +18,6 @@ A free Apple account's signature lasts seven days; refresh with Sideloadly. Inst
 
 ## First checks and controls
 
-Try the opening and New Game, then Training, Reading and Save. Tap the original game buttons; the bottom strip also provides arrows, Confirm, Cancel and Sub. In the title's Load menu, hover/select a slot then use the bottom Confirm button if a direct tap does not confirm it.
+Try the opening and New Game, then Training, Reading and Save. Tap the original game buttons; the updated bottom strip also provides arrows, Confirm, Cancel, Sub and Menu. Menu offers Return to title, with confirmation before discarding unsaved progress. Normal launches show the title so you can load a saved slot. In the title's Load menu, hover/select a slot then use the bottom Confirm button if a direct tap does not confirm it.
 
 If it stops, keep the displayed error and the app's files in **Files → On My iPhone → Monochrome** for troubleshooting. Do not delete its saved data. Device startup, memory, audio and later gameplay are still being validated.

@@ -738,6 +738,56 @@ void return_to_title_resets_game_state_and_keeps_saved_settings() {
     rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000005) == 123);
     REQUIRE(std::filesystem::equivalent(base.parent_path(), temporary)); std::filesystem::remove_all(base);
 }
+void force_stop_message_unblocks_its_owner_without_reopening_text() {
+    auto p = project({cmd(101, {}, 0, {"First message"}), cmd(121, {2000001, 77, 0, 0}), cmd(101, {}, 0, {"Second message"})});
+    auto stopper = p["common"]["events"][0]; stopper["id"] = 1;
+    stopper["commands"] = Json::array({cmd(105)}); p["common"]["events"].push_back(stopper);
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.number(9000012) == 1);
+    rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(9000012) == 0);
+    REQUIRE(rt.message_state().at("done") == true); REQUIRE(rt.message().empty());
+    rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000001) == 77);
+    REQUIRE(rt.message() == "Second message"); REQUIRE(rt.number(9000012) == 1);
+}
+void absent_label_falls_through_like_the_supplied_windows_engine() {
+    wolf::Runtime rt(project({cmd(213, {}, 0, {"Debugskip"}), cmd(121, {2000001, 77, 0, 0}),
+        cmd(213, {}, 0, {"Exists"}), cmd(121, {2000001, 999, 0, 0}), cmd(212, {}, 0, {"Exists"}), cmd(121, {2000002, 88, 0, 0})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000001) == 77); REQUIRE(rt.number(2000002) == 88);
+    REQUIRE(rt.diagnostics().at("warnings").size() == 1);
+}
+void frontend_title_request_recovers_a_compatibility_stop() {
+    wolf::Runtime rt(project({cmd(121, {2000001, 77, 0, 0}), cmd(98765)}));
+    rt.start_common(0); rt.tick(); REQUIRE(!rt.error().empty());
+    rt.return_to_title(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000001) == 0);
+    REQUIRE(rt.snapshot().at("runs").empty()); REQUIRE(rt.take_audio().size() == 3);
+}
+void picture_moves_preserve_the_original_anchor_like_windows() {
+    for (const auto& anchors : std::vector<std::pair<int, int>>{{1, 0}, {1, 4}, {4, 1}}) {
+        wolf::Runtime rt(project({cmd(150, {48 | (anchors.first << 12), 1, 0, 80, 40, 1, 255, 200, 180, 100, 0}, 0, {"<SQUARE>"}),
+            cmd(150, {0x400f01 | (anchors.second << 12), 1, 0, 0, 0, -1000000, -1000000, 200, 180, -1000000, -1000000, 0, 16777216})}));
+        rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+        REQUIRE(rt.pictures().at("1").at("anchor") == anchors.first);
+        REQUIRE(rt.pictures().at("1").at("x") == 200); REQUIRE(rt.pictures().at("1").at("y") == 180);
+    }
+}
+void group_picture_zoom_matches_reference_geometry_and_preserves_queries() {
+    const auto p = project({cmd(150, {0x1030, 10, 0, 80, 40, 1, 255, 200, 180, 100, 0}, 0, {"<SQUARE>"}),
+        cmd(150, {0x1030, 11, 0, 80, 40, 1, 255, 300, 180, 100, 0}, 0, {"<SQUARE>"}),
+        cmd(290, {64, 4, 10, 11, 200, 180, 150}), cmd(180, {99})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); rt.tick();
+    const auto zoom = wolf::picture_group_zoom(rt.pictures().at("10"), 2);
+    REQUIRE(zoom[2] == 1.25);
+    wolf::Runtime restored(p); restored.restore(rt.snapshot());
+    for (int i = 0; i < 4; ++i) restored.tick();
+    for (const char* id : {"10", "11"}) {
+        const auto& picture = restored.pictures().at(id);
+        const auto effect = wolf::picture_group_zoom(picture, restored.frame());
+        REQUIRE(effect[2] == 1.5); REQUIRE(picture.at("zoom") == 100);
+        const double left = effect[0] + (picture.at("x").get<double>() - 40 - effect[0]) * effect[2];
+        REQUIRE(left == (std::string(id) == "10" ? 140 : 290));
+        REQUIRE(effect[1] + (180 - 20 - effect[1]) * effect[2] == 150);
+    }
+}
 void game_clock_is_writable_and_survives_restore() {
     const auto p = project({cmd(180, {100})}); wolf::Runtime rt(p);
     rt.set_number(9000028, 9999999); rt.set_number(9000029, 7); rt.start_common(0); rt.tick();
@@ -791,6 +841,10 @@ int main() {
         inline_sound_metadata_overrides_command_fields();
         optional_zero_se_field_preserves_playback_parameters();
         return_to_title_resets_game_state_and_keeps_saved_settings();
-        std::cout << "61 native runtime tests passed\n"; return 0;
+        force_stop_message_unblocks_its_owner_without_reopening_text();
+        absent_label_falls_through_like_the_supplied_windows_engine(); frontend_title_request_recovers_a_compatibility_stop();
+        picture_moves_preserve_the_original_anchor_like_windows();
+        group_picture_zoom_matches_reference_geometry_and_preserves_queries();
+        std::cout << "66 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

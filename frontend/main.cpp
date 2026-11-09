@@ -8,6 +8,7 @@
 #include "file_operations.hpp"
 #include "images.hpp"
 #include "window.hpp"
+#include "presentation.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -27,6 +28,7 @@ namespace fs = std::filesystem;
 using wolf::Json;
 #ifdef WOLF_IOS
 extern "C" char* wolf_ios_documents_path();
+extern "C" void wolf_ios_safe_area(SDL_Window*, float*, float*, float*, float*);
 #endif
 
 namespace {
@@ -194,6 +196,11 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
             destination.x -= texture.border * zoom; destination.y -= texture.border * zoom_y;
             destination.w = texture.width * zoom; destination.h = texture.height * zoom_y;
         }
+        const auto group = wolf::picture_group_zoom(p, frame);
+        destination.x = group[0] + (destination.x - group[0]) * group[2];
+        destination.y = group[1] + (destination.y - group[1]) * group[2];
+        destination.w *= group[2]; destination.h *= group[2];
+        if (group[2] == 0) continue;
         const int blend = p.at("blend");
         if (blend == 2 || blend > 3) throw std::runtime_error("Unsupported picture blend mode");
         if (SDL_SetTextureBlendMode(texture.value, blend == 1 ? SDL_BLENDMODE_ADD : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND) != 0)
@@ -211,10 +218,11 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
             continue;
         }
         if (window && !builtin) {
-            draw_window_skin(renderer, texture.value, texture.width, texture.height, destination, zoom, zoom_y);
+            draw_window_skin(renderer, texture.value, texture.width, texture.height, destination, zoom * group[2], zoom_y * group[2]);
             continue;
         }
-        const SDL_FPoint pivot{p.at("x").get<float>() + shift_x - destination.x, p.at("y").get<float>() + shift_y - destination.y};
+        const SDL_FPoint pivot{static_cast<float>(group[0] + (p.at("x").get<float>() + shift_x - group[0]) * group[2] - destination.x),
+            static_cast<float>(group[1] + (p.at("y").get<float>() + shift_y - group[1]) * group[2] - destination.y)};
         if (SDL_RenderCopyExF(renderer, texture.value, &source, &destination, window ? 0 : p.at("angle").get<double>() / 10, &pivot, SDL_FLIP_NONE) != 0)
             throw std::runtime_error(SDL_GetError());
     }
@@ -234,8 +242,27 @@ void draw_message(SDL_Renderer* renderer, Assets& assets, const Json& message, i
     if (SDL_RenderCopyF(renderer, texture.value, nullptr, &destination) != 0) throw std::runtime_error(SDL_GetError());
 }
 
-bool in_button(int x, int y, int index, int width, int height) {
-    return y >= height && y < height + 64 && x >= index * width / 7 && x < (index + 1) * width / 7;
+presentation::Rect display_area(SDL_Window* window, SDL_Renderer* renderer, int width, int height) {
+    int output_w = 0, output_h = 0;
+    if (SDL_GetRendererOutputSize(renderer, &output_w, &output_h) != 0 || output_w < 1 || output_h < 1)
+        throw std::runtime_error("Cannot determine display dimensions");
+    presentation::Insets insets;
+#ifdef WOLF_IOS
+    wolf_ios_safe_area(window, &insets.left, &insets.top, &insets.right, &insets.bottom);
+    insets.left *= output_w; insets.right *= output_w;
+    insets.top *= output_h; insets.bottom *= output_h;
+#else
+    (void)window;
+#endif
+    return presentation::fit(output_w, output_h, width, height, insets);
+}
+bool show_app_menu(SDL_Window* window) {
+    const SDL_MessageBoxButtonData buttons[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Keep playing"},
+        {0, 1, "Return to title"}};
+    const SDL_MessageBoxData box{SDL_MESSAGEBOX_INFORMATION, window, "Game menu",
+        "Return to the title screen? Unsaved progress will be lost. Your saved slots are kept.", 2, buttons, nullptr};
+    int selected = 0;
+    return SDL_ShowMessageBox(&box, &selected) == 0 && selected == 1;
 }
 void capture_frame(SDL_Renderer* renderer, const char* filename, const wolf::Runtime& runtime) {
     int width = 0, height = 0;
@@ -256,6 +283,7 @@ int main(int argc, char** argv) {
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+    SDL_SetHint(SDL_HINT_IOS_HIDE_HOME_INDICATOR, "2");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER) != 0) { SDL_Log("%s", SDL_GetError()); return 2; }
     int result = 0;
     SDL_Window* window = nullptr; SDL_Renderer* renderer = nullptr; SDL_GameController* controller = nullptr;
@@ -309,25 +337,29 @@ int main(int argc, char** argv) {
         std::unique_ptr<wolf::InputReplay> replay;
         if (replay_path) replay = std::make_unique<wolf::InputReplay>(wolf::load_json(replay_path));
         const std::string title = runtime.project().at("game").at("title");
-        if (!window) window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height + 64,
+        const int screen_height = height + presentation::controls_height;
+        if (!window) window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, screen_height,
                                   SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (!capture_path.empty() ? SDL_WINDOW_HIDDEN : 0));
         if (!window) throw std::runtime_error(SDL_GetError());
         SDL_SetWindowTitle(window, title.c_str());
         if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
         if (!renderer) throw std::runtime_error(SDL_GetError());
-        SDL_RenderSetLogicalSize(renderer, width, height + 64);
+        SDL_RenderSetLogicalSize(renderer, 0, 0);
         Assets assets(game, renderer, runtime.project(), storage);
         wolf::Resources writable(storage.u8string());
         auto game_target = std::make_unique<Texture>();
-        game_target->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height + 64);
+        game_target->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, screen_height);
         if (!game_target->value) throw std::runtime_error(SDL_GetError());
         SDL_SetTextureBlendMode(game_target->value, SDL_BLENDMODE_NONE);
         Audio audio(game);
         for (int i = 0; i < SDL_NumJoysticks(); ++i) if (SDL_IsGameController(i)) { controller = SDL_GameControllerOpen(i); break; }
         const auto save_path = storage / "resume.json";
-        // Resume only snapshots made by this native runtime; Windows saves remain untouched.
-        if (fs::exists(save_path)) {
+        // Ordinary launches use the game's title/Continue flow. Keep old
+        // developer snapshots as diagnostics; opt in only for replay captures.
+        const char* resume_env = SDL_getenv("WOLF_DEV_RESUME");
+        const bool development_resume = resume_env ? std::string(resume_env) == "1" : !capture_path.empty();
+        if (development_resume && fs::exists(save_path)) {
             try { runtime.restore(wolf::load_json(save_path.u8string())); }
             catch (const std::exception& error) {
                 const auto rejected = storage / ("resume-rejected-" + std::to_string(SDL_GetPerformanceCounter()) + ".json");
@@ -341,8 +373,10 @@ int main(int argc, char** argv) {
         bool running = true;
         double last = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency(), accumulator = 0;
         wolf::Input input;
+        bool compatibility_notice = false;
         while (running && !runtime.quit_requested()) {
             input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
+            bool keyboard_menu = false;
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_QUIT) running = false;
@@ -359,6 +393,7 @@ int main(int argc, char** argv) {
                     input.mouse_right_new |= event.button.button == SDL_BUTTON_RIGHT;
                 }
                 if (event.type == SDL_MOUSEWHEEL) input.wheel += event.wheel.y;
+                if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_F12 && !event.key.repeat) keyboard_menu = true;
                 if (event.type == SDL_CONTROLLERDEVICEADDED && !controller && SDL_IsGameController(event.cdevice.which))
                     controller = SDL_GameControllerOpen(event.cdevice.which);
                 if (event.type == SDL_CONTROLLERDEVICEREMOVED && controller &&
@@ -367,15 +402,18 @@ int main(int argc, char** argv) {
                 }
             }
             const auto buttons = SDL_GetMouseState(&input.mouse_x, &input.mouse_y);
-            // SDL_GetMouseState uses window pixels; map through the renderer's logical viewport.
-            float lx = 0, ly = 0; SDL_RenderWindowToLogical(renderer, input.mouse_x, input.mouse_y, &lx, &ly);
-            input.mouse_x = static_cast<int>(lx); input.mouse_y = static_cast<int>(ly);
+            const auto display = display_area(window, renderer, width, screen_height);
+            int window_w = 0, window_h = 0, output_w = 0, output_h = 0;
+            SDL_GetWindowSize(window, &window_w, &window_h); SDL_GetRendererOutputSize(renderer, &output_w, &output_h);
+            input.mouse_x = presentation::coordinate(input.mouse_x * static_cast<float>(output_w) / std::max(1, window_w), display.x, display.w, width);
+            input.mouse_y = presentation::coordinate(input.mouse_y * static_cast<float>(output_h) / std::max(1, window_h), display.y, display.h, screen_height);
             input.mouse_left = (buttons & SDL_BUTTON_LMASK) != 0;
             input.mouse_right = (buttons & SDL_BUTTON_RMASK) != 0;
             input.mouse_middle = (buttons & SDL_BUTTON_MMASK) != 0;
             const auto* keys = SDL_GetKeyboardState(nullptr);
             auto pad = [&](SDL_GameControllerButton button) { return controller && SDL_GameControllerGetButton(controller, button); };
-            auto touch = [&](int index) { return input.mouse_left && in_button(input.mouse_x, input.mouse_y, index, width, height); };
+            auto touch = [&](int index) { return input.mouse_left && presentation::button(input.mouse_x, input.mouse_y, index, width, height); };
+            const bool open_menu = (touch(7) && input.mouse_left_new) || keyboard_menu;
             input.left = keys[SDL_SCANCODE_LEFT] || pad(SDL_CONTROLLER_BUTTON_DPAD_LEFT) || touch(0);
             input.up = keys[SDL_SCANCODE_UP] || pad(SDL_CONTROLLER_BUTTON_DPAD_UP) || touch(1);
             input.down = keys[SDL_SCANCODE_DOWN] || pad(SDL_CONTROLLER_BUTTON_DPAD_DOWN) || touch(2);
@@ -383,23 +421,34 @@ int main(int argc, char** argv) {
             input.confirm = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_Z] || pad(SDL_CONTROLLER_BUTTON_A) || touch(4);
             input.cancel = keys[SDL_SCANCODE_ESCAPE] || keys[SDL_SCANCODE_X] || pad(SDL_CONTROLLER_BUTTON_B) || touch(5);
             input.sub = keys[SDL_SCANCODE_LSHIFT] || pad(SDL_CONTROLLER_BUTTON_X) || touch(6);
-            if (input.mouse_y >= height) input.mouse_left_new = false;
+            if (input.mouse_x < 0 || input.mouse_x >= width || input.mouse_y < 0 || input.mouse_y >= height) {
+                input.mouse_left = input.mouse_right = input.mouse_middle = false;
+                input.mouse_left_new = input.mouse_right_new = false;
+                input.mouse_x = input.mouse_y = -1;
+            }
+            if (open_menu) {
+                if (show_app_menu(window)) {
+                    std::lock_guard<std::mutex> lock(lifecycle.guard);
+                    runtime.return_to_title(); compatibility_notice = false;
+                }
+                input = {}; accumulator = 0;
+            }
             const double now = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
             if (!capture_path.empty()) accumulator = 1.0 / fps;
             else if (!paused) accumulator += std::min(now - last, 0.25);
             last = now;
             int steps = 0;
-            while (accumulator >= 1.0 / fps && steps++ < 8) {
+            while (runtime.error().empty() && accumulator >= 1.0 / fps && steps++ < 8) {
                 { std::lock_guard<std::mutex> lock(lifecycle.guard); runtime.tick(replay ? replay->input(runtime.frame()) : input); }
                 audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
                 accumulator -= 1.0 / fps;
                 input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
                 if (runtime.file_operations_pending()) break;
             }
-            if (steps >= 8) accumulator = 0;
-            audio.pause(paused);
+            if (steps >= 8 || !runtime.error().empty()) accumulator = 0;
+            audio.pause(paused || !runtime.error().empty());
             if (SDL_SetRenderTarget(renderer, game_target->value) != 0) throw std::runtime_error(SDL_GetError());
-            SDL_RenderSetLogicalSize(renderer, width, height + 64);
+            SDL_RenderSetLogicalSize(renderer, width, screen_height);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
             draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), std::numeric_limits<int>::min(), 100000);
             draw_message(renderer, assets, runtime.message_state(), height);
@@ -410,8 +459,8 @@ int main(int argc, char** argv) {
                 process_file_operations(renderer, writable, file_operations, width, height);
                 assets.textures.clear(); assets.resources.invalidate();
             }
-            for (int i = 0; i < 7; ++i) {
-                SDL_Rect rect{i * width / 7 + 3, height + 3, width / 7 - 6, 58};
+            for (int i = 0; i < presentation::button_count; ++i) {
+                SDL_Rect rect{i * width / presentation::button_count + 3, height + 3, width / presentation::button_count - 6, presentation::controls_height - 6};
                 SDL_SetRenderDrawColor(renderer, 56, 56, 56, 255); SDL_RenderFillRect(renderer, &rect);
                 // Control glyphs use simple line geometry so no replacement font is bundled.
                 const int cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
@@ -425,20 +474,29 @@ int main(int argc, char** argv) {
                     SDL_RenderDrawLine(renderer, cx - 10, cy, cx - 2, cy + 8); SDL_RenderDrawLine(renderer, cx - 2, cy + 8, cx + 12, cy - 10);
                 } else if (i == 5) {
                     SDL_RenderDrawLine(renderer, cx - 9, cy - 9, cx + 9, cy + 9); SDL_RenderDrawLine(renderer, cx - 9, cy + 9, cx + 9, cy - 9);
-                } else { SDL_Rect box{cx - 10, cy - 10, 20, 20}; SDL_RenderDrawRect(renderer, &box); }
+                } else {
+                    const Json label = {{"content", i == 6 ? "Sub" : "Menu"}, {"text_style", {{"size", 20}, {"shadow", 0}, {"speed", 0}, {"antialias", 1}}}};
+                    auto& text = assets.text_picture(label, i == 6 ? "$control:sub" : "$control:menu");
+                    SDL_SetTextureBlendMode(text.value, SDL_BLENDMODE_BLEND); SDL_SetTextureColorMod(text.value, 230, 230, 230); SDL_SetTextureAlphaMod(text.value, 255);
+                    const SDL_FRect area{cx - text.width / 2.f, cy - text.height / 2.f, static_cast<float>(text.width), static_cast<float>(text.height)};
+                    SDL_RenderCopyF(renderer, text.value, nullptr, &area);
+                }
             }
             if (SDL_SetRenderTarget(renderer, nullptr) != 0) throw std::runtime_error(SDL_GetError());
-            SDL_RenderSetLogicalSize(renderer, width, height + 64);
+            SDL_RenderSetLogicalSize(renderer, 0, 0);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
-            if (SDL_RenderCopy(renderer, game_target->value, nullptr, nullptr) != 0) throw std::runtime_error(SDL_GetError());
+            const SDL_FRect destination{display.x, display.y, display.w, display.h};
+            if (SDL_RenderCopyF(renderer, game_target->value, nullptr, &destination) != 0) throw std::runtime_error(SDL_GetError());
             const bool captured = !capture_path.empty() && (runtime.frame() >= static_cast<std::uint64_t>(capture_target) || !runtime.error().empty());
             if (captured) capture_frame(renderer, capture_path.c_str(), runtime);
             SDL_RenderPresent(renderer);
-            if (!runtime.error().empty()) {
+            if (!runtime.error().empty() && !compatibility_notice) {
                 wolf::atomic_save((storage / "last-error.json").u8string(), runtime.diagnostics());
                 SDL_Log("Compatibility stop: %s", runtime.diagnostics().dump().c_str());
-                if (capture_path.empty()) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Compatibility stop", runtime.error().c_str(), window);
-                result = 1; break;
+                if (capture_path.empty()) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Compatibility stop",
+                    (runtime.error() + "\nUse Menu to return to the title screen. Saved slots are kept.").c_str(), window);
+                compatibility_notice = true;
+                if (!capture_path.empty()) { result = 1; break; }
             }
             if (captured) break;
             SDL_Delay(paused ? 30 : 1);

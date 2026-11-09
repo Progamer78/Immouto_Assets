@@ -1,6 +1,16 @@
 # Native port status — 2026-11-09
 
-**In progress. The game is not playable yet. Desktop GitHub Actions checks pass, and an unsigned ARM64 iOS compilation-check IPA has been built and inspected.**
+**In progress. The full IPA runs on the user's iPhone, with gameplay and interface defects still being fixed. The complete game is unfinished.**
+
+## First iPhone feedback and fixes
+
+- Command 105 now force-closes the active message and unblocks its owning event. The original byte offset 2195772 belongs to this operation.
+- Missing `Debugskip` in common 531 now falls through with a diagnostic warning, matching an isolated test of the supplied Windows engine. The actual girl-click replay reaches the interaction menu through frame 13250, including 600 fully rendered native ticks.
+- Picture moves preserve their existing anchor, matching three Windows reference cases. This fixes the cause of alternating displaced dialogue/name windows.
+- Command 290 group zoom supports the interaction menu's 100/105 percent effects. A Windows 150 percent fixture confirms both position and dimensions scale about the shared center; base picture queries stay unchanged.
+- Normal launches use the original title/Continue flow. Developer snapshots require explicit opt-in or capture mode. A rendered startup with an existing gameplay snapshot reaches the original title at frame 80.
+- Bottom controls use the iOS safe area and a taller strip. A new Menu button provides a confirmed Return to title action, including recovery from interpreter compatibility stops. Saved slots are retained.
+- These fixes pass local Debug/Release runtime and SDL tests. Updated touch behavior and same-app thin-update persistence still require confirmation on the phone.
 
 ## Confirmed source
 
@@ -54,14 +64,14 @@ These are **partial implementations**, not a claim that every variant of an ID w
 | 1000 | Native JPEG/PNG screenshots and writable thumbnail deletion; other file operations unsupported |
 | 250 | Basic field read/write, explicit names, row/field counts, name-to-ID queries; absent numeric row reads match the verified zero result. Other utilities missing |
 | 270 | Initial party image insertion/replacement/removal, erase-all and visibility state; movement/rendering fidelity unverified |
-| 290 | Picture draw offsets, color changes including brightening, flicker, finite/repeating shake and initial automatic pattern variants; automatic-zoom resets. Nonzero automatic zoom and other effects remain unsupported |
+| 290 | Group zoom about a shared screen coordinate, picture draw offsets, color changes including brightening, flicker, finite/repeating shake and initial automatic pattern variants; automatic-zoom resets. Nonzero automatic zoom and other effects remain unsupported |
 
 Every unsupported command/layout stops and records its context and event stack. Execution priority follows the documented map/automatic-common/parallel-common order. Trigger re-evaluation, cancellation, many system defaults and blocking rules still need reference validation.
 
 ## Verification and current incompatibility
 
 - Python tests: **14 passing**, including authoritative archived-game structure, archive priority/cache integrity and malformed-data/build-helper checks.
-- Native runtime: **61 passing scenarios** in local Debug and Release builds. New cases include native save/load, saved database reads, music resume metadata, inline/optional sound fields, screenshot scheduling and Return to Title resetting live state while retaining saved settings. SDL tests cover JPEG/PNG previews and overlapping short window borders.
+- Native runtime: **66 passing scenarios** in local Debug and Release builds. New cases include native save/load, saved database reads, music resume metadata, inline/optional sound fields, screenshot scheduling and Return to Title resetting live state while retaining saved settings. SDL tests cover JPEG/PNG previews and overlapping short window borders.
 - Windows native application and headless runtime compile using a workspace-local Zig/CMake/Ninja toolchain.
 - GitHub workflow syntax checked with checksum-verified actionlint 1.7.7.
 - First remote [native check run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780) passed: Windows, Linux and macOS core tests, plus macOS SDL frontend compilation. It completed in approximately 65 seconds including runner setup.
@@ -85,12 +95,13 @@ Every unsupported command/layout stops and records its context and event stack. 
 - Source is tracked separately from the corrected **990,994,485-byte** private game ZIP. ZIP CRCs, archived game.json hash and its 600-event inventory were verified. Large packages/IPAs use private Release attachments, not Git history or Actions artifacts.
 - Full development install: `include_game=true`, `reuse_assets=true`. Later small updates: `include_game=false`, `reuse_assets=true`, preserving the existing app/data and identifier.
 - Standalone bundled mode: `include_game=true`, `reuse_assets=false`.
-- Source checkpoints are uploaded to the private [Progamer78/Immouto_Assets repository](https://github.com/Progamer78/Immouto_Assets), branch `master`. The corrected asset ZIP remains local. No signing secrets are configured or embedded.
+- Source checkpoints are uploaded to the private [Progamer78/Immouto_Assets repository](https://github.com/Progamer78/Immouto_Assets), branch `master`. After explicit user approval, the corrected asset ZIP was uploaded to the private `game-assets` release and its remote digest verified. No signing secrets are configured or embedded.
 - First unsigned, source-only [iOS run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585937560) passed in **241 seconds overall** (236 seconds for the job). Xcode/SDL configuration took 213 seconds; actual application compilation took 10 seconds. This is not a full-game or signed-build timing.
 - Produced and downloaded `Monochrome-unsigned.ipa`: **555,314 bytes**, ARM64 Mach-O executable, bundle ID `com.local.monochromeport`, minimum iOS 15.0. ZIP integrity and bundle/executable metadata verified; no game assets included and no device installation tested. See [reports/ios_build_check.json](reports/ios_build_check.json).
 - The private [release](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-1-1) contains this compilation-check IPA. Dependency caching worked; CMake-result caching was added after this baseline and needs a subsequent run to measure its effect.
 - Opening-runtime [iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42634139411) passed for `59133fc` in **48 seconds** overall (6 configuration, 17 compilation). The downloaded [957,736-byte IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-3-1) passed ZIP/digest and ARM64/bundle metadata checks. It is unsigned, contains no game assets and has not been installed on an iPhone. It predates the later 47-scenario follow-up.
 - Home/save/load [iOS check](https://github.com/Progamer78/Immouto_Assets/actions/runs/42678866407) passed for `c6bbbcf` in **44 seconds** overall (5 configuration, 18 compilation). The downloaded [995,640-byte IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-4-1) passed ZIP/digest and ARM64/bundle metadata checks. It is unsigned, contains no game assets and has not been installed on an iPhone. The subsequent SE/audio-resume fixes require a later iOS compilation check.
+- All four [native checks](https://github.com/Progamer78/Immouto_Assets/actions/runs/42683425270) pass for `a399fb9`, including 61 core scenarios and SDL screenshot/window tests. The [full iOS build](https://github.com/Progamer78/Immouto_Assets/actions/runs/42683523069) also passed in **165 seconds overall**, producing a [1,005,677,313-byte unsigned IPA with game assets](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-5-1). Installation/signing instructions are in [IPHONE_INSTALL.md](docs/IPHONE_INSTALL.md); the user confirmed iPhone installation and gameplay, and reported the issues listed below.
 - The corrected `v2` fallback cache is now verified by that warm build. Full-asset and signed-build timings remain unmeasured.
 
 ## Next work

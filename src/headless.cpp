@@ -3,6 +3,7 @@
 #include <iostream>
 #include <filesystem>
 #include <cstdlib>
+#include <fstream>
 
 int main(int argc, char** argv) {
     try {
@@ -15,7 +16,19 @@ int main(int argc, char** argv) {
         const int frames = argc > 2 ? std::stoi(argv[2]) : 120;
         wolf::InputReplay replay(argc > 4 ? wolf::load_json(argv[4]) : wolf::Json::array());
         if (runtime.frame() > 0) (void)replay.input(runtime.frame() - 1);
-        for (int i = 0; i < frames && runtime.error().empty(); ++i) runtime.tick(replay.input(runtime.frame()));
+        std::ofstream message_trace;
+        if (const auto path = std::getenv("WOLF_MESSAGE_TRACE")) message_trace.open(path, std::ios::binary);
+        std::string previous_message;
+        for (int i = 0; i < frames && runtime.error().empty(); ++i) {
+            runtime.tick(replay.input(runtime.frame()));
+            if (message_trace && runtime.message() != previous_message && !runtime.message().empty()) {
+                wolf::Json windows = wolf::Json::object();
+                for (const auto& [id, picture] : runtime.pictures().items())
+                    if (picture.at("kind") == 3 || picture.at("kind") == 4) windows[id] = picture;
+                message_trace << wolf::Json({{"frame", runtime.frame()}, {"message", runtime.message()}, {"windows", windows}}).dump() << '\n';
+            }
+            previous_message = runtime.message();
+        }
         if (argc > 5 && runtime.error().empty()) wolf::atomic_save(argv[5], runtime.snapshot());
         std::cout << runtime.diagnostics().dump(2) << '\n';
         return runtime.error().empty() ? 0 : 1;

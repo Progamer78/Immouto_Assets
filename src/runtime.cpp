@@ -546,8 +546,9 @@ void Runtime::move_picture(const Json& cmd, Context context) {
     const int color_mode = count >= 13 ? static_cast<unsigned int>(arg(cmd, 12)) >> 24 : 1;
     if ((count >= 13 && (arg(cmd, 12) & 0xffffff)) || color_mode > 2 || (color_mode == 2 && count < 18)) fail("Unsupported picture movement color layout");
     if (color_mode != 1) for (int i = 0; i < 3; ++i) values[std::array<const char*, 3>{"red", "green", "blue"}[i]] = color_mode == 2 ? number(arg(cmd, 15 + i), context) : 100;
-    const int anchor = (flags >> 12) & 15, blend = (flags >> 8) & 15;
-    if (anchor != 15) values["anchor"] = anchor;
+    // The editor retains an anchor nibble in Move records, but Game.exe
+    // ignores it: only Show can change a picture's anchor.
+    const int blend = (flags >> 8) & 15;
     if (blend != 15) values["blend"] = blend;
     const int duration = std::max(0, number(arg(cmd, 2), context));
     Json action = {{"id", id}, {"operation", 1}, {"duration", duration}, {"values", values}, {"relative", (flags & 65536) != 0}};
@@ -586,6 +587,7 @@ void Runtime::apply_picture_change(const Json& action) {
             if (target.at(field) == 15) target[field] = previous.value(field, 0);
         if (previous.contains("flicker")) target["flicker"] = previous.at("flicker");
         if (previous.contains("draw_shift")) target["draw_shift"] = previous.at("draw_shift");
+        if (previous.contains("zoom_effect")) target["zoom_effect"] = previous.at("zoom_effect");
         if (previous.contains("shake")) target["shake"] = previous.at("shake");
         if (previous.contains("pattern_effect")) target["pattern_effect"] = previous.at("pattern_effect");
         if (action.at("same_zoom") == true && !previous.empty()) { target["zoom"] = previous.at("zoom"); target["zoom_y"] = previous.at("zoom_y"); }
@@ -685,7 +687,7 @@ void Runtime::advance_pictures() {
 void Runtime::picture_effect(const Json& cmd, Context c) {
     const int options = arg(cmd, 0), type = (options >> 4) & 15;
     if ((options & ~255) || (options & 15) != 0 || cmd.at("args").size() != 7 ||
-        (type != 2 && type != 3 && type != 5 && type != 6 && type != 7 && type != 8 && type != 9 && type != 10))
+        (type != 2 && type != 3 && type != 4 && type != 5 && type != 6 && type != 7 && type != 8 && type != 9 && type != 10))
         fail("Unsupported picture-effect target or layout");
     const int duration = std::max(0, number(arg(cmd, 1), c));
     const int first = number(arg(cmd, 2), c), last = number(arg(cmd, 3), c);
@@ -698,6 +700,13 @@ void Runtime::picture_effect(const Json& cmd, Context c) {
         const int id = picture.at("id");
         if (id < std::min(first, last) || id > std::max(first, last)) continue;
         if (type == 7) { picture.erase("automatic_zoom"); continue; }
+        if (type == 4) {
+            if (color.at(2).get<int>() < 0) fail("Negative group picture zoom is not implemented");
+            const auto previous = picture_group_zoom(picture, frame_);
+            picture["zoom_effect"] = {{"x", color.at(0)}, {"y", color.at(1)}, {"percent", color.at(2)},
+                {"from", previous[2] * 100}, {"start", frame_}, {"duration", duration}};
+            continue;
+        }
         if (type == 3) {
             if (duration == 0 || color.at(2) == 0 || (color.at(0) == 0 && color.at(1) == 0)) picture.erase("shake");
             else picture["shake"] = {{"start", frame_ + 1}, {"duration", duration}, {"x", color.at(0)}, {"y", color.at(1)}, {"count", color.at(2)}};
@@ -824,6 +833,16 @@ void Runtime::choice_sound(int variable) {
         {"fade_ms", 0}, {"start_ms", 0}, {"loop_ms", 0}});
 }
 
+std::array<double, 3> picture_group_zoom(const Json& picture, std::uint64_t frame) {
+    if (!picture.contains("zoom_effect")) return {0, 0, 1};
+    const auto& effect = picture.at("zoom_effect");
+    const auto start = effect.at("start").get<std::uint64_t>();
+    const auto duration = effect.at("duration").get<std::uint64_t>();
+    const double fraction = duration ? static_cast<double>(std::min(frame >= start ? frame - start : 0, duration)) / duration : 1;
+    const double from = effect.at("from");
+    return {effect.at("x"), effect.at("y"), (from + (effect.at("percent").get<double>() - from) * fraction) / 100};
+}
+
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame) {
     std::array<double, 3> result{picture.value("red", 100.0), picture.value("green", 100.0), picture.value("blue", 100.0)};
     if (!picture.contains("flicker")) return result;
@@ -881,6 +900,15 @@ void Runtime::execute(Run& run, const Json& cmd) {
     switch (code) {
     case 0: case 99: case 103: case 212: case 499: return;
     case 101: show_message(run, cmd); return;
+    case 105:
+        if (!cmd.at("args").empty() || !cmd.at("strings").empty()) fail("Unsupported force-message-stop layout");
+        if (!message_state_.empty()) {
+            message_state_["done"] = true;
+            message_state_["visible"] = 0;
+            message_.clear();
+        }
+        set_number(9000012, 0);
+        return;
     case 102: show_choice(run, cmd); return;
     case 130: transfer(cmd, context); return;
     case 111: {
@@ -1248,7 +1276,11 @@ void Runtime::execute(Run& run, const Json& cmd) {
         const auto& list = commands(context); const auto label = expand(cmd.at("strings").at(0), context);
         for (std::size_t i = 0; i < list.size(); ++i)
             if (list.at(i).at("code") == 212 && list.at(i).at("strings").at(0) == label) { f.pc = i + 1; return; }
-        fail("Missing label " + label); return;
+        // Game.exe falls through when the target is absent. This game's mod
+        // contains such a jump before the evening interaction checks.
+        if (warnings_.size() < 32) warnings_.push_back({{"kind", "missing_label"}, {"label", label},
+            {"common", context.common}, {"event", context.event}, {"offset", cmd.at("offset")}});
+        return;
     }
     default: fail("Unsupported command " + std::to_string(code) + " at original byte offset " + std::to_string(cmd.at("offset").get<int>()));
     }
@@ -1275,7 +1307,7 @@ Json Runtime::diagnostics() const {
     if (!message_state_.empty()) for (const char* field : {"x", "y", "visible", "total", "complete", "done"}) message[field] = message_state_.at(field);
     return {{"frame", frame_}, {"map", map_}, {"error", error_}, {"project_id", project_id_}, {"message", message},
         {"context", {{"common", error_context_.common}, {"event", error_context_.event}, {"page", error_context_.page}}},
-        {"command", error_command_}, {"executed", counts}, {"pictures", pictures_.size()}, {"stacks", stacks}};
+        {"command", error_command_}, {"executed", counts}, {"pictures", pictures_.size()}, {"stacks", stacks}, {"warnings", warnings_}};
 }
 
 Json Runtime::snapshot() const {
