@@ -3,6 +3,16 @@
 #include <cmath>
 
 namespace wolf {
+void Runtime::reset_to_title() {
+    flush_saves();
+    Runtime fresh(project_, save_root_, asset_root_, resource_root_, project_id_);
+    fresh.frame_ = frame_ + 1;
+    fresh.input_ = fresh.previous_input_ = input_; fresh.raw_input_ = raw_input_;
+    for (int kind = 0; kind < 3; ++kind)
+        fresh.audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1}, {"fade_ms", 0}});
+    *this = std::move(fresh);
+}
+
 void Runtime::game_save_load(Run& run, const Json& command) {
     const auto& args = command.at("args");
     if (args.size() != 2 || !command.at("strings").empty() || (args.at(0) != 0 && args.at(0) != 1))

@@ -4,6 +4,8 @@ Work in progress: this is the native runtime project for the game specified in [
 
 The supplied game files remain in their original directory. Git excludes the original game, generated game data, private asset archives, build outputs and signing material.
 
+For the IPA download and Windows signing steps, see [Install on iPhone](docs/IPHONE_INSTALL.md).
+
 ## Windows development
 
 Data preparation uses Python 3.12 and Node.js 22+ to decode the supplied archives. A portable Node/compiler/build toolchain can be installed inside this workspace without a system-wide installer:

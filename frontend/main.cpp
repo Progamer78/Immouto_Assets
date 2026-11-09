@@ -7,6 +7,7 @@
 #include "shapes.hpp"
 #include "file_operations.hpp"
 #include "images.hpp"
+#include "window.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -210,20 +211,7 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
             continue;
         }
         if (window && !builtin) {
-            if (texture.width % 3 || texture.height % 3) throw std::runtime_error("Window skin must divide into 3 by 3 cells");
-            const int cell_w = texture.width / 3, cell_h = texture.height / 3;
-            const float edge_w = cell_w * zoom, edge_h = cell_h * zoom_y;
-            if (destination.w < edge_w * 2 || destination.h < edge_h * 2)
-                throw std::runtime_error("Window is smaller than its corners: picture " + std::to_string(p.at("id").get<int>()) + " / " + content);
-            const float xs[] = {destination.x, destination.x + edge_w, destination.x + destination.w - edge_w};
-            const float ys[] = {destination.y, destination.y + edge_h, destination.y + destination.h - edge_h};
-            const float ws[] = {edge_w, destination.w - edge_w * 2, edge_w};
-            const float hs[] = {edge_h, destination.h - edge_h * 2, edge_h};
-            for (int row = 0; row < 3; ++row) for (int col = 0; col < 3; ++col) {
-                const SDL_Rect part{col * cell_w, row * cell_h, cell_w, cell_h};
-                const SDL_FRect area{xs[col], ys[row], ws[col], hs[row]};
-                if (SDL_RenderCopyF(renderer, texture.value, &part, &area) != 0) throw std::runtime_error(SDL_GetError());
-            }
+            draw_window_skin(renderer, texture.value, texture.width, texture.height, destination, zoom, zoom_y);
             continue;
         }
         const SDL_FPoint pivot{p.at("x").get<float>() + shift_x - destination.x, p.at("y").get<float>() + shift_y - destination.y};

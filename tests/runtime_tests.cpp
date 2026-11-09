@@ -718,6 +718,26 @@ void optional_zero_se_field_preserves_playback_parameters() {
     wolf::Runtime unsupported(project({other})); unsupported.start_common(0); unsupported.tick();
     REQUIRE(!unsupported.error().empty());
 }
+void return_to_title_resets_game_state_and_keeps_saved_settings() {
+    const auto temporary = std::filesystem::temp_directory_path();
+    const auto base = temporary / ("wolf-title-reset-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto p = project({cmd(222, {123, 3, 2000090, 0}), cmd(121, {2000000, 77, 0, 0}),
+        cmd(122, {3000000, 0}, 0, {"old game"}), cmd(121, {1100000000, 99, 0, 0}),
+        cmd(150, {0, 1, 0, 1, 1, 1, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(140, {0x02000000, 0, 0, 0, 90, 100, 0}, 0, {"music.ogg"}), cmd(180, {1}),
+        cmd(174), cmd(121, {2000099, 999, 0, 0})});
+    auto reader = p["common"]["events"][0]; reader["id"] = 1;
+    reader["commands"] = Json::array({cmd(221, {2000005, 3, 2000090, 0})}); p["common"]["events"].push_back(reader);
+    wolf::Runtime rt(p, base.u8string()); rt.start_common(0); rt.tick(); rt.take_audio();
+    rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.frame() == 2);
+    REQUIRE(rt.number(2000000) == 0); REQUIRE(rt.number(2000099) == 0); REQUIRE(rt.text(3000000).empty());
+    REQUIRE(rt.number(1100000000) == 42); REQUIRE(rt.pictures().empty());
+    REQUIRE(rt.snapshot().at("runs").empty()); REQUIRE(rt.snapshot().at("play_time_ticks") == 0);
+    const auto audio = rt.take_audio(); REQUIRE(audio.size() == 3);
+    for (const auto& event : audio) REQUIRE(event.at("operation") == "stop");
+    rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000005) == 123);
+    REQUIRE(std::filesystem::equivalent(base.parent_path(), temporary)); std::filesystem::remove_all(base);
+}
 void game_clock_is_writable_and_survives_restore() {
     const auto p = project({cmd(180, {100})}); wolf::Runtime rt(p);
     rt.set_number(9000028, 9999999); rt.set_number(9000029, 7); rt.start_common(0); rt.tick();
@@ -770,6 +790,7 @@ int main() {
         image_brightening_clamps_rgb_and_preserves_alpha();
         inline_sound_metadata_overrides_command_fields();
         optional_zero_se_field_preserves_playback_parameters();
-        std::cout << "60 native runtime tests passed\n"; return 0;
+        return_to_title_resets_game_state_and_keeps_saved_settings();
+        std::cout << "61 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

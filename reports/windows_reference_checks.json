@@ -1295,5 +1295,26 @@
       }
     },
     "delete_probe_absent": true
+  },
+  "short_window_skins": {
+    "method": "Supplied Game.exe and native SDL fixture, same supplied 3x72 nameplate skin, widths 64 and heights 28/48/72.",
+    "heights": [
+      28,
+      48,
+      72
+    ],
+    "compared_region_each": [
+      64,
+      72
+    ],
+    "differing_pixels": [
+      0,
+      0,
+      0
+    ],
+    "reference_png_sha256": "a40bdf3634995b2986c30434fdba1443272f46b6c49d4fbe1d03f4822060ca7b",
+    "native_png_sha256": "09b93e769b921246b8aa97d1b5d5f7075a6215f7dd036f69a96fe3c7b3e9cd70",
+    "behavior": "Fixed-size corners overlap; nonpositive middle pieces are omitted; later bottom pieces cover top pieces.",
+    "limits": "Three exact fixture comparisons; not all skin, scaling or blend variants."
   }
 }

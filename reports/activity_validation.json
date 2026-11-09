@@ -1,0 +1,37 @@
+{
+  "native_scenarios": 61,
+  "full_game_playable": false,
+  "device_tested": false,
+  "activities": {
+    "training": {
+      "input": "tests/replays/home-training.json",
+      "start_frame": 12650,
+      "end_frame": 14451,
+      "every_tick_rendered": true,
+      "native_exit": 0,
+      "capture_sha256": "640c6bbfb18100bba052fc142e954519cef6b4f66bfea3e860db0362ef2fcfcd",
+      "map": 1,
+      "hour": 20,
+      "minute": 0,
+      "ap": 40,
+      "technique": 8,
+      "returned_to_home": true,
+      "resumed_successful_development_state": true
+    },
+    "reading": {
+      "input": "tests/replays/home-reading.json",
+      "start_frame": 14450,
+      "end_frame": 16051,
+      "every_tick_rendered": true,
+      "native_exit": 0,
+      "capture_sha256": "2933d0859910f3c98cdda7655d1a95d762ef3506e32cab8a7348873b579286bb",
+      "map": 1,
+      "hour": 22,
+      "minute": 0,
+      "ap": 20,
+      "technique": 12,
+      "returned_to_home": true,
+      "resumed_successful_development_state": true
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "native_scenarios": 60,
+  "native_scenarios": 61,
   "python_tests_local": 14,
   "debug_and_release_core_passed": true,
   "windows_sdl_frontend_compiled": true,

@@ -1,0 +1,166 @@
+[
+  {
+    "frame": 12660,
+    "mouse_x": 190,
+    "mouse_y": 470
+  },
+  {
+    "frame": 12670,
+    "mouse_x": 190,
+    "mouse_y": 470,
+    "mouse_left": true
+  },
+  {
+    "frame": 12673,
+    "mouse_x": 190,
+    "mouse_y": 470
+  },
+  {
+    "frame": 12860,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 12870,
+    "mouse_x": 500,
+    "mouse_y": 264,
+    "mouse_left": true
+  },
+  {
+    "frame": 12873,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13270,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13272,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13360,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13362,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13450,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13452,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13540,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13542,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13630,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13632,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13720,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13722,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13810,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13812,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13900,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13902,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13990,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 13992,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 14080,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 14082,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 14170,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 14172,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 14260,
+    "confirm": true,
+    "mouse_x": 500,
+    "mouse_y": 264
+  },
+  {
+    "frame": 14262,
+    "mouse_x": 500,
+    "mouse_y": 264
+  }
+]

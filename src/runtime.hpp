@@ -89,6 +89,7 @@ private:
     Json pending_audio_ = Json::array();
     Json music_ = Json::object();
     Json pending_game_load_ = Json::object();
+    bool pending_title_reset_ = false;
     Json file_operations_ = Json::array();
     Json choice_ = Json::object();
     Json message_state_ = Json::object();
@@ -164,6 +165,7 @@ private:
     Json& save_slot(const std::string& name);
     void game_save_load(Run& run, const Json& command);
     void apply_game_load();
+    void reset_to_title();
     void remember_music(const Json& event);
     void resume_music();
     void flush_saves();

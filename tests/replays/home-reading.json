@@ -1,0 +1,161 @@
+[
+  {
+    "frame": 14460,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14470,
+    "mouse_x": 890,
+    "mouse_y": 260,
+    "mouse_left": true
+  },
+  {
+    "frame": 14473,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14670,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14672,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14760,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14762,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14850,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14852,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14940,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 14942,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15030,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15032,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15120,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15122,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15210,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15212,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15300,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15302,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15390,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15392,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15480,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15482,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15570,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15572,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15660,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15662,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15870,
+    "confirm": true,
+    "mouse_x": 890,
+    "mouse_y": 260
+  },
+  {
+    "frame": 15872,
+    "mouse_x": 890,
+    "mouse_y": 260
+  }
+]

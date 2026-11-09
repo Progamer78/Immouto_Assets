@@ -338,9 +338,10 @@ void Runtime::tick(const Input& input) {
         std::stable_sort(runs_.begin(), runs_.end(), [&](const Run& a, const Run& b) { return priority(a) < priority(b); });
         for (auto& run : runs_) if (run.wake <= frame_ && !route_pending(run)) {
             run.waiting_route = 0; run.waiting_all_routes = false; advance(run);
-            if (!pending_game_load_.empty()) break;
+            if (!pending_game_load_.empty() || pending_title_reset_) break;
         }
         if (!pending_game_load_.empty()) { apply_game_load(); return; }
+        if (pending_title_reset_) { reset_to_title(); return; }
         runs_.erase(std::remove_if(runs_.begin(), runs_.end(), [&](const Run& r) {
             return r.stack.empty() || (!r.blocking && r.stack.front().context.common < 0 && r.stack.front().context.map != map_);
         }), runs_.end());
@@ -387,7 +388,7 @@ void Runtime::advance(Run& run) {
         error_context_ = f.context; error_command_ = cmd;
         ++executed_[cmd.at("code").get<int>()];
         execute(run, cmd);
-        if (!pending_game_load_.empty()) return;
+        if (!pending_game_load_.empty() || pending_title_reset_) return;
         if (run.wake > frame_ || route_pending(run)) return;
     }
     if (!run.stack.empty()) fail("Event exceeded 20,000 commands without yielding; execution stopped");
@@ -1059,6 +1060,10 @@ void Runtime::execute(Run& run, const Json& cmd) {
     case 270: party(cmd, context); return;
     case 221: case 222: saved_variable(cmd, context); return;
     case 220: game_save_load(run, cmd); return;
+    case 174:
+        if (!cmd.at("args").empty() || !cmd.at("strings").empty()) fail("Unsupported return-to-title layout");
+        pending_title_reset_ = true;
+        return;
     case 1000: {
         const int operation = arg(cmd, 0);
         if (cmd.at("args").size() != 1 || cmd.at("strings").size() != 1 || (operation != 0 && operation != 3 && operation != 4))

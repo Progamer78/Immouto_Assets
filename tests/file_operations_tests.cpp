@@ -1,4 +1,5 @@
 #include "file_operations.hpp"
+#include "window.hpp"
 #include <stb/stb_image.h>
 #include <chrono>
 #include <fstream>
@@ -20,6 +21,16 @@ int main() {
         SDL_SetRenderDrawColor(renderer, 40, 110, 210, 255); SDL_RenderClear(renderer);
         SDL_Rect marker{4, 4, 12, 12};
         SDL_SetRenderDrawColor(renderer, 230, 30, 70, 255); SDL_RenderFillRect(renderer, &marker);
+        std::vector<unsigned char> skin(3 * 9 * 4, 255);
+        for (int y = 0; y < 9; ++y) for (int x = 0; x < 3; ++x) {
+            const int at = (y * 3 + x) * 4;
+            skin[at] = y < 3 ? 255 : 0; skin[at + 1] = y >= 3 && y < 6 ? 255 : 0; skin[at + 2] = y >= 6 ? 255 : 0;
+        }
+        auto* skin_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, 3, 9);
+        if (!skin_texture || SDL_UpdateTexture(skin_texture, nullptr, skin.data(), 12) != 0) throw std::runtime_error(SDL_GetError());
+        SDL_SetTextureBlendMode(skin_texture, SDL_BLENDMODE_BLEND);
+        draw_window_skin(renderer, skin_texture, 3, 9, SDL_FRect{40, 4, 12, 4}, 1, 1);
+        SDL_DestroyTexture(skin_texture);
         const auto temporary = std::filesystem::temp_directory_path();
         const auto base = temporary / ("wolf-screenshots-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         wolf::Resources writable(base.u8string());
@@ -37,6 +48,12 @@ int main() {
             const auto sample = (30 * width + 30) * 4;
             if (std::abs(pixels.get()[sample] - 40) > 4 || std::abs(pixels.get()[sample + 2] - 210) > 4)
                 throw std::runtime_error("Screenshot colors do not match rendered pixels");
+            if (std::string(name).find(".png") != std::string::npos) {
+                const auto upper = (4 * width + 45) * 4, lower = (5 * width + 45) * 4;
+                if (pixels.get()[upper] != 255 || pixels.get()[upper + 2] != 0 ||
+                    pixels.get()[lower] != 0 || pixels.get()[lower + 2] != 255)
+                    throw std::runtime_error("Short window corners did not overlap in their original draw order");
+            }
         }
         process_file_operations(renderer, writable, wolf::Json::array({{{"operation", 3}, {"path", "Save/preview.jpg"}}}), 64, 40);
         if (std::filesystem::exists(writable.path("Save/preview.jpg")) || !std::filesystem::exists(writable.path("Save/preview.png")))
