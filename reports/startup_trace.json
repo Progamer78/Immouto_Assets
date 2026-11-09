@@ -1,59 +1,130 @@
 {
   "command": {
     "args": [
-      -2
+      600094,
+      12323,
+      0,
+      2002,
+      0,
+      0,
+      0
     ],
-    "code": 201,
-    "indent": 0,
-    "offset": 114829,
-    "route": {
-      "commands": [
-        {
-          "args": [
-            3
-          ],
-          "code": 29,
-          "extra": [
-            0
-          ]
-        }
-      ],
-      "flags": [
-        3,
-        3,
-        3,
-        0,
-        3,
-        2
-      ]
-    },
-    "strings": []
+    "code": 210,
+    "indent": 2,
+    "offset": 2129483,
+    "strings": [
+      "",
+      "",
+      ""
+    ]
   },
   "context": {
-    "common": 48,
+    "common": 270,
     "event": -1,
     "page": -1
   },
-  "error": "Unsupported command 201 at original byte offset 114829",
+  "error": "Encoded event-call addressing is not implemented: 600094",
   "executed": {
-    "0": 115,
-    "103": 253,
-    "111": 94,
-    "121": 99,
-    "124": 4,
+    "0": 451,
+    "103": 1289,
+    "111": 484,
+    "121": 546,
+    "122": 2,
+    "123": 1,
+    "124": 5,
     "160": 1,
-    "172": 1,
-    "179": 9,
-    "180": 1,
+    "172": 87,
+    "179": 46,
+    "180": 3,
     "201": 1,
-    "250": 51,
-    "300": 38,
-    "401": 21,
-    "498": 23,
-    "499": 32
+    "210": 1,
+    "213": 2,
+    "221": 1,
+    "250": 617,
+    "270": 1,
+    "300": 125,
+    "401": 38,
+    "420": 2,
+    "498": 142,
+    "499": 223,
+    "99": 1
   },
   "frame": 0,
   "map": 0,
   "pictures": 0,
-  "project_id": "de10ab04e1fabc84"
+  "project_id": "67778d5a6703906a",
+  "stacks": [
+    {
+      "frames": [
+        {
+          "common": -1,
+          "event": 2,
+          "map": 0,
+          "page": 0,
+          "pc": 27
+        }
+      ],
+      "owner": "map:0:2"
+    },
+    {
+      "frames": [
+        {
+          "common": 43,
+          "event": -1,
+          "map": 0,
+          "page": -1,
+          "pc": 1
+        }
+      ],
+      "owner": "common:43"
+    },
+    {
+      "frames": [
+        {
+          "common": 48,
+          "event": -1,
+          "map": 0,
+          "page": -1,
+          "pc": 217
+        }
+      ],
+      "owner": "common:48"
+    },
+    {
+      "frames": [
+        {
+          "common": 270,
+          "event": -1,
+          "map": 0,
+          "page": -1,
+          "pc": 63
+        }
+      ],
+      "owner": "common:270"
+    },
+    {
+      "frames": [
+        {
+          "common": 271,
+          "event": -1,
+          "map": 0,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:271"
+    },
+    {
+      "frames": [
+        {
+          "common": 530,
+          "event": -1,
+          "map": 0,
+          "page": -1,
+          "pc": 0
+        }
+      ],
+      "owner": "common:530"
+    }
+  ]
 }

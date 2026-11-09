@@ -7,6 +7,7 @@ Original game content belongs to its respective rights holders and is supplied s
 - **nlohmann/json 3.12.0**, MIT, by Niels Lohmann and contributors. Header SHA-256: `aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63`. Full license: [third_party/nlohmann/LICENSE.MIT](third_party/nlohmann/LICENSE.MIT). [Upstream](https://github.com/nlohmann/json/tree/v3.12.0).
 - **stb**, revision `4e9b368bfc071e97206ea5c6adba68dd0cbf8897`, MIT or public domain. `stb_image.h` provides original PNG/JPEG decoding; `stb_truetype.h` is retained for upcoming font rendering. Full license: [third_party/stb/LICENSE](third_party/stb/LICENSE). [Upstream](https://github.com/nothings/stb).
 - **SDL2 2.32.10**, revision `5d249570393f7a37e037abf22cd6012a4cc56a71`, zlib license. Fetched by CMake from [libsdl-org/SDL](https://github.com/libsdl-org/SDL/tree/release-2.32.10), whose `LICENSE.txt` is included in that source distribution.
+- **wolftools archive modules**, revision `fad1d573a3abb468f2d9a7510b0e77e9be023c45`, MIT. Used by offline data preparation only, never linked into the native application. Includes the DX8 decoder and its constants, binary/text/compression/crypt helpers. [Upstream](https://github.com/popupie/wolftools), [license](tools/vendor/wolftools/LICENSE), [additional notices](tools/vendor/wolftools/THIRD_PARTY_NOTICES.md). The upstream's JSZip, music-metadata and Browser Woditor components are not bundled or used.
 
 ## Data-format references
 

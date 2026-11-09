@@ -281,13 +281,14 @@ def tilesets(path):
     return result
 
 
-def load_project(root):
+def load_project(root, basic=None, map_dir=None):
     root = Path(root)
-    basic = root / "Data" / "BasicData"
+    basic = Path(basic) if basic is not None else root / "Data" / "BasicData"
+    map_dir = Path(map_dir) if map_dir is not None else root / "Data" / "MapData"
     return {"format": "wolf-ios-ir", "version": 1,
             "game": game_settings(basic / "Game.dat"),
             "common": common_events(basic / "CommonEvent.dat"),
-            "maps": [map_data(p) for p in sorted((root / "Data" / "MapData").glob("*.mps"))],
+            "maps": [map_data(p) for p in sorted(map_dir.glob("*.mps"))],
             "databases": {name: database(basic / (file + ".dat")) for name, file in
                           [("user", "DataBase"), ("mutable", "CDataBase"), ("system", "SysDatabase")]},
             "tilesets": tilesets(basic / "TileSetData.dat")}

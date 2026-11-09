@@ -1,0 +1,94 @@
+{
+  "date": "2026-11-09",
+  "reference_executable": "Game.exe",
+  "executable_sha256": "98949e233e4085d9c745b2e8ba41e17ff49e5dafff16e5f28882d39bcaf804ea",
+  "execution_directory": "build/reference-windows (isolated copy)",
+  "original_data_hashes_unchanged": 15,
+  "archive_priority": {
+    "verified": true,
+    "method": "Changed the six-byte Living title prefix to LOOSE! only in the copied loose Game.dat, preserving file length. Restarted Game.exe with and without its copied BasicData.wolf.",
+    "with_archive_title": "Living with Sister: Monochrome Fantasy + DLC v2.02",
+    "without_archive_title": "LOOSE! with Sister: Monochrome Fantasy + DLC v2.02",
+    "selected_sources": {
+      "BasicData": {
+        "source": "Data/BasicData.wolf",
+        "kind": "archive",
+        "sha256": "6a1fd821148f7f165d1063e66b74a2f137e104263640b7200b33de32c6367e22",
+        "files": 152,
+        "different_from_loose": [
+          "CDataBase.dat",
+          "CDataBase.project",
+          "CommonEvent.dat",
+          "CommonEvent.zip",
+          "DataBase.dat",
+          "DataBase.project",
+          "DataBase.zip",
+          "Game.dat",
+          "Game.zip",
+          "SysDatabase.dat",
+          "SysDatabase.project"
+        ]
+      },
+      "MapData": {
+        "source": "Data/MapData.wolf",
+        "kind": "archive",
+        "sha256": "079f83b30bd93a64a6c4a84e1a1248949ffcbe96196d96ba8acc2c6abe2e1301",
+        "files": 9,
+        "different_from_loose": [
+          "Dungeon.mps",
+          "Map003.mps",
+          "SampleMapA.mps",
+          "SampleMapA_1.mps",
+          "SampleMapB.mps",
+          "TitleMap.mps"
+        ]
+      }
+    },
+    "loose_common_events": 550,
+    "archive_common_events": 600
+  },
+  "absent_numeric_database_row": {
+    "verified": true,
+    "commands": [
+      {
+        "code": 121,
+        "args": [
+          2000000,
+          123,
+          0,
+          0
+        ]
+      },
+      {
+        "code": 250,
+        "args": [
+          5,
+          16,
+          0,
+          4096,
+          2000000
+        ]
+      },
+      {
+        "code": 101,
+        "text": "Database row 16 read returned: \\v[0]"
+      }
+    ],
+    "table_rows": 16,
+    "observed_message": "Database row 16 read returned: 0",
+    "scope": "Positive absent numeric row read only; writes and arbitrary absent fields were not tested."
+  },
+  "encoded_event_calls": {
+    "verified": false,
+    "target": 600094,
+    "status": "Exploratory probes were inconclusive. The native runtime stops explicitly; no addressing behavior is assumed."
+  },
+  "local_asset_package": {
+    "bytes": 990994485,
+    "manifest_id": "64cc0e7d137768ffcd4190f36201d570646a58682d246626c6bc647b0e59c7b8",
+    "common_events": 600,
+    "zip_crc_checked": true,
+    "uploaded": false
+  },
+  "device_tested": false
+}

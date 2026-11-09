@@ -29,6 +29,8 @@ def archive(url, checksum):
 
 def main():
     ROOT.mkdir(exist_ok=True)
+    archive("https://nodejs.org/dist/v22.16.0/node-v22.16.0-win-x64.zip",
+            "21c2d9735c80b8f86dab19305aa6a9f6f59bbc808f68de3eef09d5832e3bfbbd")
     archive("https://ziglang.org/download/0.14.1/zig-x86_64-windows-0.14.1.zip",
             "554f5378228923ffd558eac35e21af020c73789d87afeabf4bfd16f2e6feed2c")
     version = "3.31.8"

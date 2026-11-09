@@ -9,6 +9,7 @@ import shutil
 import zipfile
 
 from wolf_data import load_project
+from resolve_data import resolve_data
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GAME = ROOT / "Living_With_SIster_Monochrome_Fantasy_Kagura_Decypted" / "Living With SIster Monochrome Fantasy"
@@ -50,6 +51,17 @@ def asset_manifest(output):
     return manifest
 
 
+def package_assets(output, target):
+    output, target = Path(output), Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".zip.tmp")
+    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
+        for path in sorted(output.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(output))
+    temporary.replace(target)
+
+
 def all_commands(project):
     for event in project["common"]["events"]:
         for cmd in event["commands"]:
@@ -61,13 +73,13 @@ def all_commands(project):
                     yield f"{game_map['file']}:{event['id']}:{index}", cmd
 
 
-def inspect(root, project):
+def inspect(root, project, sources, provenance):
     common = Counter(c["code"] for e in project["common"]["events"] for c in e["commands"])
     total = Counter(c["code"] for _, c in all_commands(project))
     files = [p for p in root.rglob("*") if p.is_file()]
-    binary = [root / "Data/BasicData" / name for name in
+    binary = [("Data/BasicData/" + name, sources["BasicData"] / name) for name in
               ["Game.dat", "CommonEvent.dat", "DataBase.dat", "CDataBase.dat", "SysDatabase.dat", "TileSetData.dat"]]
-    binary += list((root / "Data/MapData").glob("*.mps"))
+    binary += [("Data/MapData/" + p.name, p) for p in sources["MapData"].glob("*.mps")]
     return {
         "game": {key: project["game"][key] for key in ["title", "subtitle", "width", "height", "fps", "tile_size", "fonts"]},
         "common_events": len(project["common"]["events"]),
@@ -85,8 +97,9 @@ def inspect(root, project):
         "tilesets": len(project["tilesets"]),
         "file_count": len(files), "bytes": sum(p.stat().st_size for p in files),
         "extensions": dict(sorted(Counter(p.suffix.lower() for p in files).items())),
-        "source_sha256": {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in binary},
-        "resource_policy": "Loose data selected explicitly; equivalence with bundled archives is not yet verified.",
+        "source_sha256": {name: hashlib.sha256(p.read_bytes()).hexdigest() for name, p in binary},
+        "data_sources": provenance,
+        "resource_policy": "Archives take priority over loose folders, verified with the supplied Windows executable in an isolated copy.",
     }
 
 
@@ -95,16 +108,18 @@ def main():
     parser.add_argument("--game", type=Path, default=DEFAULT_GAME)
     parser.add_argument("--output", type=Path, default=ROOT / "build/game")
     parser.add_argument("--report", type=Path, default=ROOT / "reports/game_inventory.json")
+    parser.add_argument("--source-cache", type=Path, help="Separate cache for verified archive extraction")
     parser.add_argument("--stage", action="store_true", help="Copy assets to output/Data; originals are read-only")
     parser.add_argument("--zip", action="store_true", help="Create artifacts/game-assets.zip (implies --stage)")
     args = parser.parse_args()
     root, output = args.game.resolve(), args.output.resolve()
-    if not (root / "Data/BasicData/CommonEvent.dat").is_file():
+    if not (root / "Data/BasicData/CommonEvent.dat").is_file() and not (root / "Data/BasicData.wolf").is_file():
         parser.error(f"Game data not found: {root}")
     if output == root or root in output.parents or output in root.parents:
         parser.error("Output must be separate from the original game")
-    project = load_project(root)
-    report = inspect(root, project)
+    sources, provenance = resolve_data(root, args.source_cache)
+    project = load_project(root, basic=sources["BasicData"], map_dir=sources["MapData"])
+    report = inspect(root, project, sources, provenance)
     output.mkdir(parents=True, exist_ok=True)
     (output / "game.json").write_text(json.dumps(project, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
@@ -116,9 +131,12 @@ def main():
         writer.writerows(report["commands"])
     if args.stage or args.zip:
         # Keep every Data resource, including dialogue/DLC, with original relative paths.
-        # Archives are not bundled: the runtime consumes the validated loose-data IR.
+        # Archives are decoded during preparation; the app consumes resolved data.
         shutil.copytree(root / "Data", output / "Data", dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns("*.wolf"), copy_function=copy_changed)
+        for name, source in sources.items():
+            shutil.copytree(source, output / "Data" / name, dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns(".extraction.json"), copy_function=copy_changed)
         for p in root.iterdir():
             if p.is_file() and (p.suffix.lower() == ".ttf" or p.name == "dlc.dat"):
                 copy_changed(p, output / p.name)
@@ -127,11 +145,7 @@ def main():
         print("Assets staged:", output)
     if args.zip:
         target = ROOT / "artifacts/game-assets.zip"
-        target.parent.mkdir(exist_ok=True)
-        with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
-            for p in sorted(output.rglob("*")):
-                if p.is_file():
-                    archive.write(p, p.relative_to(output))
+        package_assets(output, target)
         print("Private build asset package:", target)
     print(f"Parsed {report['common_events']} common events, {len(project['maps'])} maps, "
           f"{report['all_command_records']} command records, {len(report['commands'])} command IDs")

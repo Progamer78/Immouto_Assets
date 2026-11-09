@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <atomic>
+#include <set>
 
 namespace wolf {
 using Json = nlohmann::json;
@@ -32,12 +33,21 @@ struct Run {
     std::string owner;
     bool blocking = false;
     std::uint64_t wake = 0;
+    std::uint64_t waiting_route = 0;
+    bool waiting_all_routes = false;
     std::vector<Frame> stack;
+};
+struct Route {
+    std::uint64_t id = 0, wake = 0;
+    std::size_t pc = 0;
+    std::string target;
+    Context context;
+    Json source;
 };
 
 class Runtime {
 public:
-    explicit Runtime(Json project);
+    explicit Runtime(Json project, std::string save_root = {});
     void tick(const Input& input = {});
     void start_common(int id);
     std::int32_t number(int ref, Context context = {});
@@ -51,6 +61,7 @@ public:
 
     const Json& project() const { return project_; }
     const Json& pictures() const { return pictures_; }
+    const Json& characters() const { return characters_; }
     const std::string& error() const { return error_; }
     const std::string& message() const { return message_; }
     std::uint64_t frame() const { return frame_; }
@@ -61,6 +72,10 @@ public:
 private:
     Json project_, databases_, pictures_ = Json::object(), audio_ = Json::array();
     Json transition_ = {{"id", -1}, {"frames", 0}, {"wait", false}};
+    Json characters_ = Json::object();
+    Json party_ = {{"images", {"", "", "", "", "", ""}}, {"visible", true}};
+    std::vector<Route> routes_;
+    std::uint64_t next_route_ = 1;
     std::map<std::uint64_t, std::int32_t> numbers_;
     std::map<std::uint64_t, std::string> strings_;
     std::vector<Run> runs_;
@@ -72,6 +87,9 @@ private:
     Input input_;
     std::string error_, message_;
     std::string project_id_;
+    std::string save_root_;
+    std::map<std::string, Json> save_slots_;
+    std::set<std::string> dirty_saves_;
     Context error_context_;
     Json error_command_;
 
@@ -87,6 +105,14 @@ private:
     void branch(Frame& frame, int indent, const std::vector<bool>& conditions);
     void picture(const Json& command, Context context);
     void call(Run& run, const Json& command);
+    std::string character_key(int target, Context context);
+    void start_route(Run& run, const Json& command);
+    void advance_route(Route& route);
+    void party(const Json& command, Context context);
+    bool route_pending(const Run& run) const;
+    bool string_reference(int ref);
+    void saved_variable(const Json& command, Context context);
+    void flush_saves();
     std::int32_t assign(std::int32_t current, std::int64_t value, int operation) const;
     void fail(const std::string& message) const;
 };

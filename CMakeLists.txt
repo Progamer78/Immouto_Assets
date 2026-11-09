@@ -7,7 +7,7 @@ option(WOLF_REUSE_GAME_ASSETS "Keep game assets across small iOS development app
 set(WOLF_GAME_DIR "" CACHE PATH "Converted game directory produced by tools/prepare_game.py --stage")
 set(WOLF_BUNDLE_ID "com.local.monochromeport" CACHE STRING "iOS bundle identifier")
 
-add_library(wolf_core STATIC src/runtime.cpp src/persistence.cpp src/asset_cache.cpp)
+add_library(wolf_core STATIC src/runtime.cpp src/movement.cpp src/saved_variables.cpp src/persistence.cpp src/asset_cache.cpp)
 target_include_directories(wolf_core PUBLIC src third_party)
 if(MSVC)
     target_compile_options(wolf_core PRIVATE /W4 /utf-8)

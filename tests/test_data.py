@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from wolf_data import FormatError, Reader, command, load_project
 from prepare_game import DEFAULT_GAME, all_commands
+from resolve_data import resolve_data
 
 
 class BinarySafetyTests(unittest.TestCase):
@@ -31,13 +32,16 @@ class BinarySafetyTests(unittest.TestCase):
 class OriginalGameTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.project = load_project(DEFAULT_GAME)
+        sources, cls.provenance = resolve_data(DEFAULT_GAME)
+        cls.project = load_project(DEFAULT_GAME, basic=sources["BasicData"], map_dir=sources["MapData"])
 
     def test_complete_common_file(self):
         events = self.project["common"]["events"]
-        self.assertEqual(len(events), 550)
-        self.assertEqual(sum(len(e["commands"]) for e in events), 167843)
-        self.assertEqual(len({e["id"] for e in events}), 550)
+        self.assertEqual(len(events), 600)
+        self.assertEqual(sum(len(e["commands"]) for e in events), 210486)
+        self.assertEqual(len({e["id"] for e in events}), 600)
+        self.assertEqual(self.provenance["BasicData"]["kind"], "archive")
+        self.assertIn("CommonEvent.dat", self.provenance["BasicData"]["different_from_loose"])
 
     def test_original_display_settings(self):
         game = self.project["game"]
@@ -49,7 +53,10 @@ class OriginalGameTests(unittest.TestCase):
                          {"user": 40, "mutable": 30, "system": 28})
         for db in self.project["databases"].values():
             for entry in db["types"]:
-                self.assertEqual(len(entry["positions"]), len(entry["schema"]["fields"]))
+                # Unused archive tables can retain one editor placeholder name
+                # while containing no stored fields at all.
+                if entry["positions"]:
+                    self.assertEqual(len(entry["positions"]), len(entry["schema"]["fields"]))
                 for row in entry["rows"]:
                     self.assertEqual(len(row), len(entry["positions"]))
 

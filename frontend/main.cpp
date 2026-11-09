@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
             SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255); SDL_RenderFillRect(renderer, &bar); SDL_RenderPresent(renderer);
         });
 #endif
-        active_runtime = std::make_unique<wolf::Runtime>(wolf::load_json((game / "game.json").u8string()));
+        active_runtime = std::make_unique<wolf::Runtime>(wolf::load_json((game / "game.json").u8string()), (storage / "saves").u8string());
         auto& runtime = *active_runtime;
         const int width = runtime.project().at("game").at("width"), height = runtime.project().at("game").at("height");
         const int fps = runtime.project().at("game").at("fps");

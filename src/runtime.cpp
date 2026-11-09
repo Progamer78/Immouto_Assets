@@ -25,7 +25,7 @@ Json load_json(const std::string& filename) {
     return Json::parse(stream);
 }
 
-Runtime::Runtime(Json project) : project_(std::move(project)) {
+Runtime::Runtime(Json project, std::string save_root) : project_(std::move(project)), save_root_(std::move(save_root)) {
     if (project_.at("format") != "wolf-ios-ir" || project_.at("version") != 1)
         fail("Unsupported intermediate data version");
     std::uint64_t fingerprint = 14695981039346656037ULL;
@@ -39,6 +39,11 @@ Runtime::Runtime(Json project) : project_(std::move(project)) {
     numbers_[9000115] = 319; // This compatibility target is the supplied 3.191 runtime.
     numbers_[9000116] = project_.at("game").at("width");
     numbers_[9000117] = project_.at("game").at("height");
+    numbers_[9000118] = project_.at("game").value("tile_size", 16);
+    numbers_[9000084] = project_.at("game").at("width") == 320 && project_.at("game").at("height") == 240 ? 0 :
+        project_.at("game").at("width") == 640 && project_.at("game").at("height") == 480 ? 1 :
+        project_.at("game").at("width") == 800 && project_.at("game").at("height") == 600 ? 2 : -1;
+    for (int ref = 9000100; ref <= 9000102; ++ref) numbers_[ref] = 100;
 }
 
 void Runtime::fail(const std::string& message) const { throw std::runtime_error(message); }
@@ -264,11 +269,28 @@ void Runtime::tick(const Input& input) {
     if (!error_.empty() || quit_) return;
     input_ = input;
     try {
+        for (auto& route : routes_) advance_route(route);
+        routes_.erase(std::remove_if(routes_.begin(), routes_.end(), [&](const Route& r) {
+            return r.pc >= r.source.at("route").at("commands").size() && r.wake <= frame_;
+        }), routes_.end());
         schedule();
-        for (auto& run : runs_) if (run.wake <= frame_) advance(run);
+        // Documented execution priority: map events, automatic common events,
+        // then parallel common events in ID order. Trigger re-evaluation and
+        // cancellation rules still need more behavioral reference tests.
+        auto priority = [&](const Run& run) {
+            if (run.stack.empty()) return std::pair<int, int>{3, 0};
+            const auto c = run.stack.front().context;
+            return std::pair<int, int>{c.common < 0 ? 0 : common(c.common).at("mode") == 1 ? 1 : 2,
+                c.common < 0 ? c.event : c.common};
+        };
+        std::stable_sort(runs_.begin(), runs_.end(), [&](const Run& a, const Run& b) { return priority(a) < priority(b); });
+        for (auto& run : runs_) if (run.wake <= frame_ && !route_pending(run)) {
+            run.waiting_route = 0; run.waiting_all_routes = false; advance(run);
+        }
         runs_.erase(std::remove_if(runs_.begin(), runs_.end(), [](const Run& r) { return r.stack.empty(); }), runs_.end());
         ++frame_;
     } catch (const std::exception& error) { error_ = error.what(); }
+    try { flush_saves(); } catch (const std::exception& error) { error_ = error.what(); }
 }
 
 void Runtime::advance(Run& run) {
@@ -293,7 +315,7 @@ void Runtime::advance(Run& run) {
         error_context_ = f.context; error_command_ = cmd;
         ++executed_[cmd.at("code").get<int>()];
         execute(run, cmd);
-        if (run.wake > frame_) return;
+        if (run.wake > frame_ || route_pending(run)) return;
         if (!message_.empty()) return;
     }
     if (!run.stack.empty()) fail("Event exceeded 20,000 commands without yielding; execution stopped");
@@ -309,6 +331,7 @@ void Runtime::call(Run& run, const Json& cmd) {
         for (const auto& e : project_.at("common").at("events")) if (e.at("name") == name) { id = e.at("id"); break; }
     } else {
         const int target = number(arg(cmd, 0), caller);
+        if (target >= 600000 && target < 700000) fail("Encoded event-call addressing is not implemented: " + std::to_string(target));
         if (target < 500000 || target >= 600000) fail("Map-event insertion is not implemented");
         id = target - 500000;
     }
@@ -321,8 +344,9 @@ void Runtime::call(Run& run, const Json& cmd) {
     for (int i = 0; i < n; ++i) nums.push_back(number(arg(cmd, 2 + i), caller));
     for (int i = 0; i < s; ++i) {
         const int slot = n + i;
-        strs.push_back((flags & (1 << (12 + i))) ? text(arg(cmd, 2 + slot), caller)
-            : expand(cmd.at("strings").at(i + (code == 300 ? 1 : 0)), caller));
+        const int prefix = code == 300 || cmd.at("strings").size() == static_cast<std::size_t>(s + 1) ? 1 : 0;
+        strs.push_back((flags & (1 << (12 + i))) ? expand(cmd.at("strings").at(i + prefix), caller)
+            : text(arg(cmd, 2 + slot), caller));
     }
     Context callee{id, caller.event, caller.page, caller.map};
     for (int i = 0; i < n; ++i) set_number(1600000 + i + (i >= 5 ? 5 : 0), nums.at(i), callee);
@@ -372,8 +396,44 @@ void Runtime::execute(Run& run, const Json& cmd) {
         fail("Missing branch end"); return;
     }
     case 121: {
-        if (cmd.at("args").size() != 4 || (arg(cmd, 3) & 255)) fail("Variable range/option flags are not implemented");
-        const int a = value(1), b = value(2), operation = (arg(cmd, 3) >> 12) & 15;
+        const int options = arg(cmd, 3);
+        if (cmd.at("args").size() != 4 || (options & ~0xff7f)) fail("Variable range/unknown option flags are not implemented");
+        auto operand = [&](int i, int literal, int indirect) {
+            if (options & literal) {
+                if (options & indirect) fail("Conflicting literal and indirect variable flags");
+                return arg(cmd, i);
+            }
+            const int first = value(i);
+            return options & indirect ? number(first, context) : first;
+        };
+        const int destination = options & 16 ? value(0) : arg(cmd, 0);
+        const int a = operand(1, 4, 32), b = operand(2, 8, 64), operation = (options >> 12) & 15;
+        const int assignment = (options >> 8) & 15;
+        if (options & 2) {
+            double computed = 0;
+            switch (operation) {
+            case 0: computed = static_cast<double>(a) + b; break;
+            case 1: computed = static_cast<double>(a) - b; break;
+            case 2: computed = static_cast<double>(a) * b; break;
+            case 3: computed = b == 0 ? 0 : static_cast<double>(a) / b; break;
+            case 4: computed = b == 0 ? 0 : std::fmod(a, b); break;
+            case 5: computed = a & b; break;
+            case 6: computed = std::uniform_int_distribution<int>(std::min(a, b), std::max(a, b))(random_); break;
+            case 15: computed = b; break;
+            default: fail("Unsupported real-number arithmetic operator");
+            }
+            const double current = number(destination, context);
+            switch (assignment) {
+            case 0: break; case 1: computed = current + computed; break; case 2: computed = current - computed; break;
+            case 3: computed = current * computed; break; case 4: computed = computed == 0 ? 0 : current / computed; break;
+            case 5: computed = computed == 0 ? 0 : std::fmod(current, computed); break;
+            case 6: computed = std::max(current, computed); break; case 7: computed = std::min(current, computed); break;
+            case 8: computed = std::abs(computed); break; default: fail("Unsupported real-number assignment operator");
+            }
+            const double bound = options & 1 ? 999999 : 2000000000;
+            set_number(destination, static_cast<std::int32_t>(std::clamp(computed, -bound, bound)), context);
+            return;
+        }
         std::int64_t computed = 0;
         switch (operation) {
         case 0: computed = static_cast<std::int64_t>(a) + b; break;
@@ -386,7 +446,9 @@ void Runtime::execute(Run& run, const Json& cmd) {
         case 15: computed = b; break;
         default: fail("Unsupported arithmetic operator " + std::to_string(operation));
         }
-        set_number(arg(cmd, 0), assign(number(arg(cmd, 0), context), computed, (arg(cmd, 3) >> 8) & 15), context);
+        int result = assign(number(destination, context), computed, assignment);
+        if (options & 1) result = std::clamp(result, -999999, 999999);
+        set_number(destination, result, context);
         return;
     }
     case 122:
@@ -411,6 +473,10 @@ void Runtime::execute(Run& run, const Json& cmd) {
         set_number(arg(cmd, 0), pressed, context); return;
     }
     case 150: picture(cmd, context); return;
+    case 201: start_route(run, cmd); return;
+    case 202: run.waiting_all_routes = true; return;
+    case 270: party(cmd, context); return;
+    case 221: case 222: saved_variable(cmd, context); return;
     case 160:
         if (cmd.at("args").size() != 2) fail("Unexpected transition configuration layout");
         transition_ = {{"id", value(0)}, {"frames", arg(cmd, 1) & 65535},
@@ -477,8 +543,34 @@ void Runtime::execute(Run& run, const Json& cmd) {
                 if (labels.at(i) == label) { field_id = static_cast<int>(i); break; }
             if (field_id < 0) fail("Database field name not found: " + label);
         }
-        auto& field = databases_.at(names[bank]).at("types").at(type_id).at("rows").at(row_id).at(field_id);
         const int assignment = (options >> 4) & 15;
+        auto& table = databases_.at(names[bank]).at("types").at(type_id);
+        if (operation == 1 && (row_id == -3 || field_id == -3)) {
+            if (cmd.at("args").size() != 5) fail("Database ID query has no destination");
+            const int result = row_id == -3 && field_id == -3 ? type_id : row_id == -3 ? field_id : row_id;
+            set_number(arg(cmd, 4), assign(number(arg(cmd, 4), context), result, assignment), context);
+            return;
+        }
+        if (operation == 1 && (row_id == -1 || field_id == -1)) {
+            if (cmd.at("args").size() != 5) fail("Database count query has no destination");
+            const int count = row_id == -1 ? static_cast<int>(table.at("rows").size())
+                : static_cast<int>(original.at("positions").size());
+            set_number(arg(cmd, 4), assign(number(arg(cmd, 4), context), count, assignment), context);
+            return;
+        }
+        if (operation == 1 && row_id >= 0 && row_id < 10000 &&
+                static_cast<std::size_t>(row_id) >= table.at("rows").size() && field_id >= 0 &&
+                static_cast<std::size_t>(field_id) < original.at("positions").size()) {
+            // Verified with the supplied Game.exe: an absent row reads as an
+            // empty value, rather than raising an interpreter exception.
+            if (cmd.at("args").size() != 5) fail("Database read has no destination");
+            if (original.at("positions").at(field_id).get<int>() / 1000 == 2) {
+                if (assignment > 1) fail("Unsupported string database assignment");
+                set_text(arg(cmd, 4), assignment ? text(arg(cmd, 4), context) : "", context);
+            } else set_number(arg(cmd, 4), assign(number(arg(cmd, 4), context), 0, assignment), context);
+            return;
+        }
+        auto& field = table.at("rows").at(row_id).at(field_id);
         if (operation == 1) {
             if (cmd.at("args").size() != 5) fail("Database read has no destination");
             if (field.is_string()) {
@@ -549,9 +641,16 @@ Json Runtime::take_audio() { Json result = std::move(audio_); audio_ = Json::arr
 Json Runtime::diagnostics() const {
     Json counts = Json::object();
     for (auto [code, count] : executed_) counts[std::to_string(code)] = count;
+    Json stacks = Json::array();
+    for (const auto& run : runs_) {
+        Json frames = Json::array();
+        for (const auto& f : run.stack) frames.push_back({{"common", f.context.common}, {"event", f.context.event},
+            {"map", f.context.map}, {"page", f.context.page}, {"pc", f.pc}});
+        if (!frames.empty()) stacks.push_back({{"owner", run.owner}, {"frames", frames}});
+    }
     return {{"frame", frame_}, {"map", map_}, {"error", error_}, {"project_id", project_id_},
         {"context", {{"common", error_context_.common}, {"event", error_context_.event}, {"page", error_context_.page}}},
-        {"command", error_command_}, {"executed", counts}, {"pictures", pictures_.size()}};
+        {"command", error_command_}, {"executed", counts}, {"pictures", pictures_.size()}, {"stacks", stacks}};
 }
 
 Json Runtime::snapshot() const {
@@ -567,20 +666,26 @@ Json Runtime::snapshot() const {
             stack.push_back({{"common", f.context.common}, {"event", f.context.event}, {"page", f.context.page},
                 {"map", f.context.map}, {"pc", f.pc}, {"return_target", f.return_target}, {"loops", loops}});
         }
-        runs.push_back({{"owner", run.owner}, {"blocking", run.blocking}, {"wake", run.wake}, {"stack", stack}});
+        runs.push_back({{"owner", run.owner}, {"blocking", run.blocking}, {"wake", run.wake},
+            {"waiting_route", run.waiting_route}, {"waiting_all_routes", run.waiting_all_routes}, {"stack", stack}});
     }
+    Json routes = Json::array();
+    for (const auto& route : routes_) routes.push_back({{"id", route.id}, {"wake", route.wake}, {"pc", route.pc},
+        {"target", route.target}, {"source", route.source}, {"common", route.context.common},
+        {"event", route.context.event}, {"page", route.context.page}, {"map", route.context.map}});
     std::ostringstream rng; rng << random_;
-    return {{"format", "wolf-ios-state"}, {"version", 1}, {"title", project_.at("game").at("title")}, {"project_id", project_id_},
+    return {{"format", "wolf-ios-state"}, {"version", 2}, {"title", project_.at("game").at("title")}, {"project_id", project_id_},
         {"frame", frame_}, {"map", map_}, {"hero_x", hero_x_}, {"hero_y", hero_y_},
         {"numbers", numbers}, {"strings", strings}, {"databases", databases_}, {"pictures", pictures_},
-        {"runs", runs}, {"rng", rng.str()}, {"message", message_}, {"transition", transition_}};
+        {"runs", runs}, {"rng", rng.str()}, {"message", message_}, {"transition", transition_},
+        {"characters", characters_}, {"party", party_}, {"routes", routes}, {"next_route", next_route_}};
 }
 
 void Runtime::restore(const Json& state) {
-    if (state.at("format") != "wolf-ios-state" || state.at("version") != 1 ||
+    if (state.at("format") != "wolf-ios-state" || state.at("version") != 2 ||
         state.at("title") != project_.at("game").at("title") || state.at("project_id") != project_id_)
         fail("Incompatible native save: source game data differs");
-    Runtime candidate(project_);
+    Runtime candidate(project_, save_root_);
     candidate.frame_ = state.at("frame"); candidate.map_ = state.at("map");
     candidate.hero_x_ = state.at("hero_x"); candidate.hero_y_ = state.at("hero_y");
     candidate.numbers_.clear();
@@ -588,9 +693,19 @@ void Runtime::restore(const Json& state) {
     for (const auto& [key, value] : state.at("strings").items()) candidate.strings_[std::stoull(key)] = value;
     candidate.databases_ = state.at("databases"); candidate.pictures_ = state.at("pictures");
     candidate.transition_ = state.at("transition");
+    candidate.characters_ = state.at("characters"); candidate.party_ = state.at("party"); candidate.next_route_ = state.at("next_route");
+    for (const auto& item : state.at("routes")) {
+        Route route; route.id = item.at("id"); route.wake = item.at("wake"); route.pc = item.at("pc");
+        route.target = item.at("target"); route.source = item.at("source");
+        route.context = {item.at("common"), item.at("event"), item.at("page"), item.at("map")};
+        if (!candidate.characters_.contains(route.target) || route.pc > route.source.at("route").at("commands").size() ||
+            route.id >= candidate.next_route_) fail("Save contains an invalid character route");
+        candidate.routes_.push_back(std::move(route));
+    }
     if (!candidate.current_map()) fail("Saved map is missing");
     for (const auto& entry : state.at("runs")) {
         Run run; run.owner = entry.at("owner"); run.blocking = entry.at("blocking"); run.wake = entry.at("wake");
+        run.waiting_route = entry.at("waiting_route"); run.waiting_all_routes = entry.at("waiting_all_routes");
         for (const auto& item : entry.at("stack")) {
             Frame f; f.context = {item.at("common"), item.at("event"), item.at("page"), item.at("map")};
             f.pc = item.at("pc"); f.return_target = item.at("return_target");

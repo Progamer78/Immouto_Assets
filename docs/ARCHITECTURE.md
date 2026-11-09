@@ -19,21 +19,21 @@ The C++ interpreter must execute original commands; it must never replace a scen
 
 ## Data path
 
-`Original files -> Python binary reader -> game.json IR -> C++ interpreter -> SDL renderer/input`
+`Original archives/folders -> offline archive resolution -> Python binary reader -> game.json IR -> C++ interpreter -> SDL renderer/input`
 
 `tools/wolf_data.py` uses only the Python standard library. It validates markers, string encoding, bounds and complete consumption of each supported file. Original command IDs, numeric arguments, strings, branch depths and movement routes are retained. Common-event metadata, map event pages, database schemas and tileset passability are also retained.
 
-The intermediate format is documented in [DATA_FORMAT.md](DATA_FORMAT.md). Python is needed during preparation only. The iOS application reads JSON using a vendored C++ library and executes native compiled code.
+The intermediate format is documented in [DATA_FORMAT.md](DATA_FORMAT.md). Python and Node are needed during preparation only. The iOS application reads JSON using a vendored C++ library and executes native compiled code.
 
-Loose BasicData and MapData files are explicitly selected. Packed archives coexist with these files; equivalence and original-runtime precedence have not yet been verified. That remains part of Windows reference testing, not an assumption of full compatibility.
+The supplied `.wolf` archives take priority over loose folders. This was verified by changing a title marker in an isolated copy: with the archive present Game.exe used its original title; without it the edited loose title appeared. The archives contain 600 common events rather than the loose folder's 550. The converter now decodes these archives into a separate hash-verified cache using the vendored MIT wolftools modules. It never writes into the supplied original. See [reference checks](../reports/windows_reference_checks.json).
 
 ## Interpreter and state
 
-Each running event has a stack of frames, program counters, loop counters, a wake frame, and event identity. A called common event shares the caller's execution stream so its waits suspend the caller. Parallel streams retain independent wake frames. Exact WOLF scheduling order, restart conditions and blocking behavior need behavioral comparisons with Game.exe.
+Each running event has a stack of frames, program counters, loop counters, a wake frame, and event identity. A called common event shares the caller's execution stream so its waits suspend the caller. Parallel streams retain independent wake frames. Execution priority follows the documented map/automatic-common/parallel-common order; trigger re-evaluation, restart/cancellation and blocking rules still need behavioral comparisons. Character property routes retain their execution position and caller wait; positional movement and jumps remain unsupported.
 
 Variable banks distinguish ordinary, system, common-self and per-map event-self state. Database operations resolve explicit name flags; numeric table IDs can be stale when a name is selected. This was observed in real startup commands and independently supported by WOLF's documentation and the Rust parser.
 
-Native development snapshots capture all currently implemented state, including variables, strings, databases, pictures, stacks, loop counters, wake frames and RNG state. Writes use a flushed temporary file and atomic replacement. Original Windows saves and WOLF SaveLoad commands are not yet supported. A halted interpreter cannot create a snapshot that would skip the failed command on resume.
+Native development snapshots capture all currently implemented state, including variables, strings, databases, pictures, character properties/routes, stacks, loop counters, wake frames and RNG state. Writes use a flushed temporary file and atomic replacement. Original Windows saves and whole-game SaveLoad are not yet supported. Separate partial variable files support commands 221/222 for settings/unlocks. A halted interpreter cannot create a snapshot that would skip the failed command on resume.
 
 ## Platform and build
 

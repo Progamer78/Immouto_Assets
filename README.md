@@ -6,7 +6,7 @@ The supplied game files remain in their original directory. Git excludes the ori
 
 ## Windows development
 
-Python 3.12 and Git are sufficient to prepare data. A portable compiler/build system can be installed inside this workspace without a system-wide installer:
+Data preparation uses Python 3.12 and Node.js 22+ to decode the supplied archives. A portable Node/compiler/build toolchain can be installed inside this workspace without a system-wide installer:
 
 ```powershell
 python tools/bootstrap_windows.py
@@ -41,7 +41,7 @@ The iOS build runs on a GitHub-hosted macOS runner. You do not need a Mac.
 
 1. Create an **empty private repository** on GitHub. Do not initialize it with a README or `.gitignore`; this workspace supplies those.
 2. Push this workspace's source Git repository. The original game and `artifacts/` are excluded automatically. The native-check workflow runs on source pushes.
-3. To package the game, run `python tools/prepare_game.py --zip`. This creates `artifacts/game-assets.zip` with the converted data and original Data resources. It omits Windows executables, the supplied saves and duplicate `.wolf` archives.
+3. To package the game, run `python tools/prepare_game.py --zip`. This resolves the original `.wolf` archives, then creates `artifacts/game-assets.zip` with the converted data and original Data resources. It omits Windows executables, the supplied saves and duplicate archives. The runtime needs neither Node nor the archive decoder.
 4. In the private repository's **Releases**, create a release with tag `game-assets`. Attach `artifacts/game-assets.zip` to the release. Upload it as a **release attachment**, not through the repository's Add file screen. The asset stays outside Git history.
 5. Open **Actions -> Build iOS IPA -> Run workflow**. Leave `include_game` unchecked for an initial compilation check; enable it to build with your private assets. Leave `signed` unchecked unless signing is configured.
 6. After a successful run, open **Releases** and download the IPA from `ios-build-...`. The large IPA is a release attachment, not an Actions artifact. An unsigned IPA requires signing before installation. A small Actions artifact contains build-tool metadata.
@@ -54,7 +54,7 @@ The first [unsigned iOS check](https://github.com/Progamer78/Immouto_Assets/acti
 
 ## Fast development cycle
 
-Most interpreter fixes are built and tested on Windows first. The iOS workflow caches SDL source, compiled dependency objects and CMake configuration results with an Xcode-version/CMake key; it does not cache or download the 989 MB game package for source-only builds. Documentation-only pushes do not rerun desktop compilation, and a newer source push cancels superseded native checks.
+Most interpreter fixes are built and tested on Windows first. The iOS workflow caches SDL source, compiled dependency objects and CMake configuration results with an Xcode-version/CMake key; it does not cache or download the approximately 1 GB game package for source-only builds. Documentation-only pushes do not rerun desktop compilation, and a newer source push cancels superseded native checks.
 
 For repeated iPhone testing, install one full build with `include_game=true` and `reuse_assets=true`. On first launch it copies the versioned assets into app storage, displaying progress. Subsequent builds can use `include_game=false`, `reuse_assets=true`: they contain the runtime and reuse that installed data. Use the same app identifier/signing setup and **update the existing app without deleting its data**. If a sideloading method removes the app first, its data may need reinstalling too.
 
