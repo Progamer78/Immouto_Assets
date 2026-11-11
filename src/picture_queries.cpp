@@ -1,5 +1,6 @@
 #include "runtime.hpp"
 #include "text.hpp"
+#include "picture_geometry.hpp"
 #include <algorithm>
 
 namespace wolf {
@@ -49,21 +50,8 @@ void Runtime::picture_query(const Json& command, Context context) {
             if (field == 2) result = width;
             else if (field == 3) result = height;
             else {
-                if (picture.at("angle") != 0 || picture.at("zoom").get<int>() <= 0 || picture.at("zoom_y").get<int>() <= 0) fail("Rotated/flipped picture hit tests are not implemented");
-                const double zoom = picture.at("zoom").get<double>() / 100;
-                const double w = width * zoom, h = height * picture.at("zoom_y").get<double>() / 100;
-                double x = picture.at("x"), y = picture.at("y");
-                switch (picture.at("anchor").get<int>()) {
-                case 0: break;
-                case 1: x -= w / 2; y -= h / 2; break;
-                case 2: y -= h; break;
-                case 3: x -= w; break;
-                case 4: x -= w; y -= h; break;
-                case 5: x -= w / 2; break;
-                case 6: x -= w / 2; y -= h; break;
-                default: fail("Unsupported picture hit-test anchor");
-                }
-                result = input_.mouse_x >= x && input_.mouse_x < x + w && input_.mouse_y >= y && input_.mouse_y < y + h;
+                if (picture.at("angle") != 0) fail("Rotated picture hit tests are not implemented");
+                result = picture_area_contains(picture_area(picture, width, height), input_.mouse_x, input_.mouse_y);
             }
             break;
         }

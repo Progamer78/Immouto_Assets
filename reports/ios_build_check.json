@@ -180,7 +180,7 @@
     "minimum_ios": "15.0",
     "game_assets_included": false,
     "signed": false,
-    "device_tested": false,
+    "device_tested": true,
     "run_seconds": 43.0,
     "steps_seconds": {
       "Set up job": 1.0,
@@ -195,6 +195,7 @@
       "Post Reuse compiled iOS dependencies": 0.0,
       "Post Run actions/checkout@v4": 1.0,
       "Complete job": 1.0
-    }
+    },
+    "device_feedback": "User confirmed previous fixes work; reported a relative picture transform stop and flipped picture rendering stop. New fixes await device confirmation."
   }
 }

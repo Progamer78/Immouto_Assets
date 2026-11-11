@@ -78,7 +78,7 @@ Headless tests that need existing slots set `WOLF_STORAGE_DIR` to the app storag
 
 ## Whole-game implementation work list
 
-Run `python tools/inventory_commands.py build/game/game.json` to regenerate [command_variants.json](../reports/command_variants.json). It groups all 262,338 records into 639 selected layouts across 52 command IDs, preserving sample original locations without copying dialogue or resource contents. Nine IDs currently have no dispatch handler. Existing handlers still contain unsupported variants, so these counts are not a completion percentage. The inventory guides batched command-family work; clean input replays, renderer captures and actual gameplay/save-load comparisons remain separate acceptance checks.
+Run `python tools/inventory_commands.py build/game/game.json` to regenerate [command_variants.json](../reports/command_variants.json). It groups all 262,338 records into 639 selected layouts across 52 command IDs, preserving sample original locations without copying dialogue or resource contents. Seven IDs currently have no dispatch handler. Existing handlers still contain unsupported variants, so these counts are not a completion percentage. The inventory guides batched command-family work; clean input replays, renderer captures and actual gameplay/save-load comparisons remain separate acceptance checks.
 
 ## Home activities
 
@@ -94,3 +94,10 @@ The [girl interaction replay](../tests/replays/girl-interaction.json) resumes th
 Normal launch now ignores development snapshots unless `WOLF_DEV_RESUME=1` or capture mode opts in. Set `WOLF_DEV_RESUME=0` to test normal startup even during a capture. With an existing frame-12650 snapshot, frame 80 renders the original title. The Menu control adds an explicit Return to title action; the iOS safe-area geometry is tested with a 2796x1290 output and bottom/side insets, but actual phone touch behavior still needs confirmation.
 
 The final normal-startup test also includes existing saved settings and native slot 2. The title renders at frame 80; replaying Continue/Load reaches home at 12650. Original and copied slot bytes remain unchanged. Updated iOS source compiled successfully in Actions; build 7 passed archive/digest/ARM64 checks and all four source CI jobs. Phone behavior remains a separate check.
+
+
+## Second iPhone feedback: transforms and overnight progression
+
+The [bedtime replay](../tests/replays/bedtime.json) and [Bath replay](../tests/replays/bath.json) start at the successful interaction-menu state at frame 13250. Both pass through frame 16250 in SDL with every tick rendered. Bedtime writes an autosave JPEG and advances to Day 2 at 8:30. Its debug output command 106 is handled without a gameplay message. The [morning continuation](../tests/replays/morning-continuation.json) runs another 1800 rendered ticks, to frame 18050. These are limited continuations, not a claim that the full second day or later game is complete.
+
+The isolated Windows/native rotation-and-mirroring fixture matches all 589824 pixels. Both axes remain effective during rotation in the supplied 3.191 executable, despite the current official help's warning about separate-axis scaling. Relative delayed Show uses the live position at activation, confirmed by three reference rectangles. SDL readback checks cover all four flip combinations at zero and 90 degrees. See [metadata](../reports/picture_transform_validation.json) for hashes and limits. Assets and screenshots remain outside Git.

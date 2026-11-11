@@ -9,6 +9,8 @@
 #include "images.hpp"
 #include "window.hpp"
 #include "presentation.hpp"
+#include "picture_geometry.hpp"
+#include "picture_render.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -180,18 +182,11 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
             window ? texture.width : width, window ? texture.height : height};
         if (kind == 2) source = {0, 0, texture.width, texture.height};
         const float zoom = p.at("zoom").get<float>() / 100.f;
-        const float zoom_y = p.at("angle") != 0 && !window ? zoom : p.at("zoom_y").get<float>() / 100.f;
-        if (zoom < 0 || zoom_y < 0) throw std::runtime_error("Flipped picture rendering is not implemented");
+        const float zoom_y = p.at("zoom_y").get<float>() / 100.f;
         const auto [shift_x, shift_y] = wolf::picture_draw_offset(p, frame);
-        SDL_FRect destination{p.at("x").get<float>() + shift_x, p.at("y").get<float>() + shift_y, width * zoom, height * zoom_y};
-        const int anchor = p.at("anchor");
-        if (anchor == 1) { destination.x -= destination.w / 2; destination.y -= destination.h / 2; }
-        else if (anchor == 2) destination.y -= destination.h;
-        else if (anchor == 3) destination.x -= destination.w;
-        else if (anchor == 4) { destination.x -= destination.w; destination.y -= destination.h; }
-        else if (anchor == 5) destination.x -= destination.w / 2;
-        else if (anchor == 6) { destination.x -= destination.w / 2; destination.y -= destination.h; }
-        else if (anchor != 0) throw std::runtime_error("Unsupported picture anchor");
+        const auto area = wolf::picture_area(p, width, height);
+        SDL_FRect destination{static_cast<float>(area.x + shift_x), static_cast<float>(area.y + shift_y),
+            static_cast<float>(area.w), static_cast<float>(area.h)};
         if (kind == 2) {
             destination.x -= texture.border * zoom; destination.y -= texture.border * zoom_y;
             destination.w = texture.width * zoom; destination.h = texture.height * zoom_y;
@@ -218,13 +213,11 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
             continue;
         }
         if (window && !builtin) {
-            draw_window_skin(renderer, texture.value, texture.width, texture.height, destination, zoom * group[2], zoom_y * group[2]);
+            const auto flip = normalize_picture_area(destination);
+            draw_window_skin(renderer, texture.value, texture.width, texture.height, destination, std::abs(zoom) * group[2], std::abs(zoom_y) * group[2], flip);
             continue;
         }
-        const SDL_FPoint pivot{static_cast<float>(group[0] + (p.at("x").get<float>() + shift_x - group[0]) * group[2] - destination.x),
-            static_cast<float>(group[1] + (p.at("y").get<float>() + shift_y - group[1]) * group[2] - destination.y)};
-        if (SDL_RenderCopyExF(renderer, texture.value, &source, &destination, window ? 0 : p.at("angle").get<double>() / 10, &pivot, SDL_FLIP_NONE) != 0)
-            throw std::runtime_error(SDL_GetError());
+        draw_picture_copy(renderer, texture.value, &source, destination, window ? 0 : p.at("angle").get<double>() / 10);
     }
 }
 

@@ -1,6 +1,14 @@
-# Native port status — 2026-11-09
+# Native port status — 2026-11-10
 
 **In progress. The full IPA runs on the user's iPhone, with gameplay and interface defects still being fixed. The complete game is unfinished.**
+
+## Second iPhone feedback and continued progression
+
+The user confirmed that build 7 fixed the previous issues, then reported unsupported picture transforms during a natural Day 2 event and flipped-picture rendering near the bedtime/bath menu. Relative Show commands now use the previous picture position, including delayed activation. The renderer supports horizontal/vertical mirroring for images, text, generated shapes and window skins. Rotation uses the scaled rectangle center for every anchor and retains both scale axes, matching this supplied Windows executable. Mirrored, unrotated picture hit queries also work.
+
+A 1024x576 native fixture matches the Windows reference with zero differing pixels across six rotation/mirroring cases and two relative-Show cases. A separate delayed-Show fixture confirms live-position behavior. The native Bath replay passes 3000 rendered ticks. Bedtime passes 3000 rendered ticks, handles its autosave preview, and reaches Day 2 at 8:30. Another 1800 native morning ticks pass. That path exposed command 106; debug-text append/clear (106/107) now writes bounded diagnostics without blocking gameplay or changing the message window.
+
+There are now 69 passing runtime scenarios in Release, SDL pixel/file/layout checks, and 14 Python tests. These are continuation tests from a successful save/load state. Device verification of this update and whole-game compatibility remain outstanding. See [validation metadata](reports/picture_transform_validation.json).
 
 ## First iPhone feedback and fixes
 
@@ -48,14 +56,14 @@ These are **partial implementations**, not a claim that every variant of an ID w
 
 | IDs | Current scope |
 | --- | --- |
-| 0, 99, 103 | Blank rows, editor checkpoints, comments |
+| 0, 99, 103, 106, 107 | Blank rows, editor checkpoints, comments, bounded debug-text output and clearing |
 | 101, 102, 111, 112, 401, 420, 421, 499 | Blocking messages and choices, gradual text reveal, numeric/string conditions and branch selection. Initial built-in choice rendering and touch hit regions; additional text/choice controls remain missing |
 | 121 | Basic arithmetic/assignments, random/remainder/AND, literal/indirect operands and destinations, real intermediate calculations, direct inclusive-offset ranges with per-cell operand re-evaluation, and result binding; indirect ranges and advanced operators missing |
 | 122 | Literal/direct/indirect string copy and append, basic deletion/replacement, UTF-8 text-file reads, missing-file and basic file-existence queries; other string operations missing |
 | 123–126 | Basic/mouse queries, next-frame automatic basic input, basic-button and mouse-device permissions, picture dimensions/existence/reveal/hover queries; additional device/query variants missing |
 | 130 | Immediate hero transfers with half-tile coordinates, retained/stopped map audio and cancellation of the old map's parallel runs. Transition modes and other targets remain unsupported |
 | 140 | Filename SE/BGM/BGS playback, inline filename volume/pitch/loop metadata, delayed SE, zero-frequency default, native pitch/mixing, streamed music, BGM/BGS stop/fade/loops and estimated saved playback position; other stop/database/preload variants missing |
-| 150 | File/text/window pictures, built-in squares/frames/circles/gradients/triangles/lines, separate zoom axes, retained show values, colors/brightening, basic show/move interpolation, delays, inclusive erase/move ranges and delay reset. Free transforms, scroll links and some delayed-range interactions remain incomplete |
+| 150 | Relative Show and Move positions, mirrored images/text/window skins, centered rotation, file/text/window pictures, built-in squares/frames/circles/gradients/triangles/lines, separate zoom axes, retained show values, colors/brightening, basic show/move interpolation, delays, inclusive erase/move ranges and delay reset. Free transforms, scroll links and some delayed-range interactions remain incomplete |
 | 160 | Transition settings retained; actual transition rendering missing |
 | 170–172, 176, 179, 180, 498 | Loops, break/end, counted iterations, waits |
 | 175, 210, 212, 213, 300 | Quit, common-event calls, labels/jumps; some call variants missing |
@@ -71,7 +79,7 @@ Every unsupported command/layout stops and records its context and event stack. 
 ## Verification and current incompatibility
 
 - Python tests: **14 passing**, including authoritative archived-game structure, archive priority/cache integrity and malformed-data/build-helper checks.
-- Native runtime: **66 passing scenarios** in local Debug and Release builds. New cases include native save/load, saved database reads, music resume metadata, inline/optional sound fields, screenshot scheduling and Return to Title resetting live state while retaining saved settings. SDL tests cover JPEG/PNG previews and overlapping short window borders.
+- Native runtime: **69 passing scenarios** in local Debug and Release builds. New cases include native save/load, saved database reads, music resume metadata, inline/optional sound fields, screenshot scheduling and Return to Title resetting live state while retaining saved settings. SDL tests cover JPEG/PNG previews and overlapping short window borders.
 - Windows native application and headless runtime compile using a workspace-local Zig/CMake/Ninja toolchain.
 - GitHub workflow syntax checked with checksum-verified actionlint 1.7.7.
 - First remote [native check run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780) passed: Windows, Linux and macOS core tests, plus macOS SDL frontend compilation. It completed in approximately 65 seconds including runner setup.

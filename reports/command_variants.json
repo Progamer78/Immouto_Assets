@@ -2,7 +2,7 @@
   "format": "wolf-command-inventory",
   "version": 1,
   "project_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c",
-  "runtime_source_sha256": "cedb2f9edd1ca9dcd03383d5e2237ba550be615bad95da19ca97b951f77de768",
+  "runtime_source_sha256": "e4ed08370b32a399fbe0848f63336c9eaf4820f7d3825ff6794da592f1f8adb1",
   "limits": [
     "Static inventory; neither reachability nor full compatibility is established.",
     "A handler's presence does not mean its layouts, rendering or timing are supported.",
@@ -13,11 +13,6 @@
   "command_ids": 52,
   "layout_groups": 639,
   "missing_dispatch_handlers": [
-    {
-      "id": 106,
-      "name": "DebugText",
-      "records": 76
-    },
     {
       "id": 104,
       "name": "Unknown104",
@@ -42,11 +37,6 @@
       "id": 402,
       "name": "Unknown",
       "records": 2
-    },
-    {
-      "id": 107,
-      "name": "ClearDebugText",
-      "records": 1
     },
     {
       "id": 161,
@@ -720,7 +710,7 @@
       "id": 106,
       "name": "DebugText",
       "records": 76,
-      "dispatch_handler_present": false,
+      "dispatch_handler_present": true,
       "variants": [
         {
           "numeric_arguments": 0,
@@ -748,7 +738,7 @@
       "id": 107,
       "name": "ClearDebugText",
       "records": 1,
-      "dispatch_handler_present": false,
+      "dispatch_handler_present": true,
       "variants": [
         {
           "numeric_arguments": 0,

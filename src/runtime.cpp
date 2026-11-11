@@ -488,7 +488,7 @@ void Runtime::picture(const Json& cmd, Context c) {
     const bool variable_file = kind == 1 || kind == 4;
     const auto count = cmd.at("args").size();
     const int zoom_mode = (flags >> 20) & 15;
-    if ((flags & ~0x00f0ffff) || (zoom_mode != 0 && zoom_mode != 3 && zoom_mode != 4) || kind > 4 ||
+    if ((flags & ~0x00f1ffff) || (zoom_mode != 0 && zoom_mode != 3 && zoom_mode != 4) || kind > 4 ||
         (count != (variable_file ? 12u : 11u) && count != 13 && count != 14 && count != 15 && count != 18 && count != 19) ||
         (count >= 15 && arg(cmd, 14) != 0) || (zoom_mode == 3 && count != 19))
         fail("Unsupported picture transform layout");
@@ -510,7 +510,7 @@ void Runtime::picture(const Json& cmd, Context c) {
         record["text_reveal"] = {{"times", text_reveal_times(record.at("content"), number(9000011))}};
     }
     const Json action = {{"id", id}, {"operation", 0}, {"duration", duration}, {"values", record},
-        {"same_zoom", zoom_mode == 4}, {"same_color", color_mode == 1}};
+        {"same_zoom", zoom_mode == 4}, {"same_color", color_mode == 1}, {"relative", (flags & 65536) != 0}};
     const int delay = count >= 14 ? std::max(0, number(arg(cmd, 13), c)) : 0;
     if (delay) {
         // Game.exe allocates an empty picture immediately. Queries see it and
@@ -577,6 +577,8 @@ void Runtime::apply_picture_change(const Json& action) {
     auto target = show ? action.at("values") : previous;
     target.erase("tween"); target.erase("fade_erase");
     if (show) {
+        if (action.value("relative", false)) for (const char* field : {"x", "y"})
+            if (target.at(field) != -1000000) target[field] = previous.value(field, 0) + target.at(field).get<int>();
         // Show also replaces an existing picture. The editor's "same value"
         // fields retain its state just as they do for a move, including blend.
         for (const auto& [field, fallback] : std::vector<std::pair<std::string, int>>{
@@ -900,6 +902,15 @@ void Runtime::execute(Run& run, const Json& cmd) {
     switch (code) {
     case 0: case 99: case 103: case 212: case 499: return;
     case 101: show_message(run, cmd); return;
+    case 106:
+        if (!cmd.at("args").empty() || cmd.at("strings").size() != 1) fail("Unsupported debug-text layout");
+        if (debug_text_.size() == 64) debug_text_.erase(debug_text_.begin());
+        debug_text_.push_back(expand(cmd.at("strings").at(0), context));
+        return;
+    case 107:
+        if (!cmd.at("args").empty() || !cmd.at("strings").empty()) fail("Unsupported clear-debug-text layout");
+        debug_text_.clear();
+        return;
     case 105:
         if (!cmd.at("args").empty() || !cmd.at("strings").empty()) fail("Unsupported force-message-stop layout");
         if (!message_state_.empty()) {
@@ -1308,7 +1319,7 @@ Json Runtime::diagnostics() const {
     if (!message_state_.empty()) for (const char* field : {"x", "y", "visible", "total", "complete", "done"}) message[field] = message_state_.at(field);
     return {{"frame", frame_}, {"map", map_}, {"error", error_}, {"project_id", project_id_}, {"message", message},
         {"context", {{"common", error_context_.common}, {"event", error_context_.event}, {"page", error_context_.page}}},
-        {"command", error_command_}, {"executed", counts}, {"pictures", pictures_.size()}, {"stacks", stacks}, {"warnings", warnings_}};
+        {"command", error_command_}, {"executed", counts}, {"pictures", pictures_.size()}, {"stacks", stacks}, {"warnings", warnings_}, {"debug_text", debug_text_}};
 }
 
 Json Runtime::snapshot() const {

@@ -4,6 +4,7 @@
 #include "text.hpp"
 #include "shapes.hpp"
 #include "images.hpp"
+#include "picture_geometry.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -790,6 +791,43 @@ void group_picture_zoom_matches_reference_geometry_and_preserves_queries() {
         REQUIRE(effect[1] + (180 - 20 - effect[1]) * effect[2] == 150);
     }
 }
+void relative_picture_show_uses_live_position_after_delay() {
+    const auto p = project({cmd(150, {48, 1, 0, 80, 40, 1, 255, 100, 80, 100, 0}, 0, {"<SQUARE>"}),
+        cmd(150, {65584, 1, 0, 80, 40, 1, 255, 10, -5, 100, 0}, 0, {"<SQUARE>"}),
+        cmd(150, {65584, 2, 0, 80, 40, 1, 255, 10, -5, 100, 0}, 0, {"<SQUARE>"}),
+        cmd(150, {65584, 1, 0, 80, 40, 1, 255, 5, 0, 100, 0, 0, 16777216, 2}, 0, {"<SQUARE>"}),
+        cmd(150, {1, 1, 0, 0, 0, -1000000, -1000000, 200, 90, -1000000, -1000000}), cmd(180, {99})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.pictures().at("2").at("x") == 10); REQUIRE(rt.pictures().at("2").at("y") == -5);
+    wolf::Runtime restored(p); restored.restore(rt.snapshot()); restored.tick(); restored.tick();
+    REQUIRE(restored.error().empty()); REQUIRE(restored.pictures().at("1").at("x") == 205);
+    REQUIRE(restored.pictures().at("1").at("y") == 90);
+}
+void signed_picture_areas_match_reference_anchors_and_allow_hit_queries() {
+    for (int anchor : {0, 1, 4}) {
+        const auto p = project({cmd(150, {0x300030 | (anchor << 12), 1, 0, 80, 40, 1, 255, 200, 180, -100, 0, 0, 33554432, 0, 0, 100, 100, 100, 100}, 0, {"<SQUARE>"}),
+            cmd(124, {2000001, 16384, 1, 8}), cmd(124, {2000002, 16384, 1, 11}), cmd(124, {2000003, 16384, 1, 12})});
+        wolf::Runtime rt(p); rt.start_common(0); wolf::Input in;
+        in.mouse_x = anchor == 0 ? 160 : anchor == 1 ? 200 : 240; in.mouse_y = anchor == 4 ? 160 : 180;
+        rt.tick(in); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000001) == 1);
+        REQUIRE(rt.number(2000002) == -100); REQUIRE(rt.number(2000003) == 100);
+        const auto area = wolf::picture_area(rt.pictures().at("1"), 80, 40);
+        REQUIRE(wolf::picture_area_contains(area, in.mouse_x, in.mouse_y));
+        REQUIRE(!wolf::picture_area_contains(area, std::max(area.x, area.x + area.w), in.mouse_y));
+    }
+}
+void debug_output_is_nonblocking_bounded_and_separate_from_game_messages() {
+    std::vector<Json> commands{cmd(121, {2000001, 77, 0, 0})};
+    for (int i = 0; i < 70; ++i) commands.push_back(cmd(106, {}, 0, {"Debug \\v[1]"}));
+    commands.push_back(cmd(101, {}, 0, {"Game message"}));
+    auto p = project(commands); auto clear = p["common"]["events"][0]; clear["id"] = 1;
+    clear["commands"] = Json::array({cmd(107), cmd(121, {2000002, 88, 0, 0})}); p["common"]["events"].push_back(clear);
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.diagnostics().at("debug_text").size() == 64); REQUIRE(rt.diagnostics().at("debug_text").at(0) == "Debug 77");
+    REQUIRE(rt.message() == "Game message"); rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000002) == 88); REQUIRE(rt.diagnostics().at("debug_text").empty());
+    REQUIRE(rt.message() == "Game message"); REQUIRE(rt.number(9000012) == 1);
+}
 void game_clock_is_writable_and_survives_restore() {
     const auto p = project({cmd(180, {100})}); wolf::Runtime rt(p);
     rt.set_number(9000028, 9999999); rt.set_number(9000029, 7); rt.start_common(0); rt.tick();
@@ -847,6 +885,9 @@ int main() {
         absent_label_falls_through_like_the_supplied_windows_engine(); frontend_title_request_recovers_a_compatibility_stop();
         picture_moves_preserve_the_original_anchor_like_windows();
         group_picture_zoom_matches_reference_geometry_and_preserves_queries();
-        std::cout << "66 native runtime tests passed\n"; return 0;
+        relative_picture_show_uses_live_position_after_delay();
+        signed_picture_areas_match_reference_anchors_and_allow_hit_queries();
+        debug_output_is_nonblocking_bounded_and_separate_from_game_messages();
+        std::cout << "69 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

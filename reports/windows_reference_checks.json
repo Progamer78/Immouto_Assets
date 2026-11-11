@@ -1395,5 +1395,44 @@
       ]
     ],
     "reference_png_sha256": "80a598ebed635c8dcdfd31b95fe22b8e10ad61fe9f526739006a9fe6431119b1"
+  },
+  "second_device_transform_checks": {
+    "source": "Supplied Game.exe in a restored isolated copy",
+    "rotation_and_mirroring": {
+      "dimensions": [
+        1024,
+        576
+      ],
+      "differing_pixels": 0,
+      "cases": 6,
+      "relative_show_cases": 2,
+      "reference_sha256": "a16e5202974b18f6326110f9c3e8856a735e681efe4cfb45bc9633fc0e201340",
+      "native_sha256": "a6d1b8a377b53810929a228a09b92070a77a1a7a43f89af8ec4b38051f4248a7",
+      "behavior": "Both scale axes remain effective during rotation; every anchor rotates about the scaled rectangle center"
+    },
+    "relative_show_delay": {
+      "reference_sha256": "40dcce9416d664f562462b5b4a18e533e7cb4ae7b6836d8e2060ba3384f1cce8",
+      "bounds": [
+        [
+          110,
+          100,
+          149,
+          119
+        ],
+        [
+          360,
+          110,
+          399,
+          129
+        ],
+        [
+          660,
+          110,
+          699,
+          129
+        ]
+      ],
+      "behavior": "Delayed relative Show adds offsets to the live picture position at activation"
+    }
   }
 }

@@ -1,0 +1,97 @@
+{
+  "date": "2026-11-10",
+  "scope": "Second iPhone feedback: relative Show transforms and mirrored rendering; continued bedtime/morning progression",
+  "local_tests": {
+    "runtime_scenarios": 69,
+    "configuration": "Release",
+    "prior_debug_scenarios": 68,
+    "sdl_pixel_readback_and_file_tests": "pass",
+    "python_tests": 14,
+    "workflow_lint": "pass"
+  },
+  "windows_reference": {
+    "source": "Supplied Game.exe in a restored isolated copy",
+    "rotation_and_mirroring": {
+      "dimensions": [
+        1024,
+        576
+      ],
+      "differing_pixels": 0,
+      "cases": 6,
+      "relative_show_cases": 2,
+      "reference_sha256": "a16e5202974b18f6326110f9c3e8856a735e681efe4cfb45bc9633fc0e201340",
+      "native_sha256": "a6d1b8a377b53810929a228a09b92070a77a1a7a43f89af8ec4b38051f4248a7",
+      "behavior": "Both scale axes remain effective during rotation; every anchor rotates about the scaled rectangle center"
+    },
+    "relative_show_delay": {
+      "reference_sha256": "40dcce9416d664f562462b5b4a18e533e7cb4ae7b6836d8e2060ba3384f1cce8",
+      "bounds": [
+        [
+          110,
+          100,
+          149,
+          119
+        ],
+        [
+          360,
+          110,
+          399,
+          129
+        ],
+        [
+          660,
+          110,
+          699,
+          129
+        ]
+      ],
+      "behavior": "Delayed relative Show adds offsets to the live picture position at activation"
+    }
+  },
+  "limits": [
+    "New IPA needs iPhone verification",
+    "These are continuation replays from a successful native save/load state, not a full fresh-start or ending test",
+    "Rotated hit tests, free transforms and scroll links remain unsupported"
+  ],
+  "bedtime": {
+    "start_frame": 13250,
+    "end_frame": 16250,
+    "every_tick_rendered": true,
+    "error": "",
+    "capture_sha256": "f5d353b443140df6164f0115b71abe8857c6ca657cd7583c561ab4977339d0c0",
+    "hud": {
+      "6200": "\\f[20]8:30",
+      "6211": "\\f[14]Day 2\\f[14]",
+      "6235": "\\f[12] 60/60",
+      "6251": "\\f[20] 3108 \\f[14]G"
+    },
+    "autosave_preview_count": 1,
+    "debug_106_executed": 1
+  },
+  "bath": {
+    "start_frame": 13250,
+    "end_frame": 16250,
+    "every_tick_rendered": true,
+    "error": "",
+    "capture_sha256": "085a8d9992961e289c49b857fb3aec31f02b1d83a786c72e114a84d36a7da0d6",
+    "hud": {
+      "6200": "\\f[20]19:30",
+      "6211": "\\f[14]Day 1\\f[14]",
+      "6235": "\\f[12] 60/60",
+      "6251": "\\f[20] 3108 \\f[14]G"
+    }
+  },
+  "morning": {
+    "start_frame": 16250,
+    "end_frame": 18050,
+    "every_tick_rendered": true,
+    "error": "",
+    "capture_sha256": "f5d353b443140df6164f0115b71abe8857c6ca657cd7583c561ab4977339d0c0",
+    "hud": {
+      "6200": "\\f[20]8:30",
+      "6211": "\\f[14]Day 2\\f[14]",
+      "6235": "\\f[12] 60/60",
+      "6251": "\\f[20] 3108 \\f[14]G"
+    }
+  }
+}

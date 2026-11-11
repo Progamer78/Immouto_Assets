@@ -116,6 +116,7 @@ private:
     int pending_auto_input_ = 0;
     std::string error_, message_;
     Json warnings_ = Json::array();
+    Json debug_text_ = Json::array();
     std::string project_id_;
     std::string save_root_;
     std::string asset_root_;

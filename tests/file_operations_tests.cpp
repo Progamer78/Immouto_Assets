@@ -1,11 +1,38 @@
 #include "file_operations.hpp"
 #include "window.hpp"
 #include "presentation.hpp"
+#include "picture_render.hpp"
+#include "picture_geometry.hpp"
 #include <stb/stb_image.h>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <memory>
+
+void check_picture_transforms(SDL_Renderer* renderer) {
+    std::vector<unsigned char> pixels(8 * 4 * 4, 255);
+    const std::array<std::array<unsigned char, 3>, 4> colors{{{255,0,0}, {0,0,255}, {0,255,0}, {255,255,0}}};
+    for (int y = 0; y < 4; ++y) for (int x = 0; x < 8; ++x)
+        for (int c = 0; c < 3; ++c) pixels[(y * 8 + x) * 4 + c] = colors[(y >= 2) * 2 + (x >= 4)][c];
+    std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)> texture(
+        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, 8, 4), SDL_DestroyTexture);
+    if (!texture || SDL_UpdateTexture(texture.get(), nullptr, pixels.data(), 32) != 0) throw std::runtime_error(SDL_GetError());
+    SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
+    for (int flip_y : {0, 1}) for (int flip_x : {0, 1}) for (int angle : {0, 90}) {
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderClear(renderer);
+        const wolf::Json picture{{"x",32}, {"y",24}, {"anchor",1}, {"zoom",flip_x ? -200 : 200}, {"zoom_y",flip_y ? -200 : 200}};
+        const auto area = wolf::picture_area(picture, 8, 4);
+        draw_picture_copy(renderer, texture.get(), nullptr,
+            {static_cast<float>(area.x), static_cast<float>(area.y), static_cast<float>(area.w), static_cast<float>(area.h)}, angle);
+        std::vector<unsigned char> output(64 * 56 * 4);
+        if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, output.data(), 64 * 4) != 0) throw std::runtime_error(SDL_GetError());
+        // At 90 degrees the lower-left source corner becomes the upper-left.
+        const int index = angle ? (flip_x ? 1 : 0) + (flip_y ? 0 : 2) : flip_x + flip_y * 2;
+        const int sample = ((angle ? 18 : 22) * 64 + (angle ? 30 : 26)) * 4;
+        for (int c = 0; c < 3; ++c) if (output[sample + c] != colors[index][c])
+            throw std::runtime_error("Mirrored/rotated picture pixels do not match the expected corner");
+    }
+}
 
 int main() {
     SDL_Window* window = nullptr;
@@ -26,6 +53,7 @@ int main() {
         if (!renderer) throw std::runtime_error(SDL_GetError());
         target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, 64, 56);
         if (!target || SDL_SetRenderTarget(renderer, target) != 0) throw std::runtime_error(SDL_GetError());
+        check_picture_transforms(renderer);
         SDL_SetRenderDrawColor(renderer, 40, 110, 210, 255); SDL_RenderClear(renderer);
         SDL_Rect marker{4, 4, 12, 12};
         SDL_SetRenderDrawColor(renderer, 230, 30, 70, 255); SDL_RenderFillRect(renderer, &marker);
