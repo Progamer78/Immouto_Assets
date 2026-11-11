@@ -112,6 +112,8 @@ int main() {
         CancelButton cancel; wolf::Input pressed; pressed.cancel = true;
         const auto first = cancel.map(pressed), held = cancel.map(pressed); cancel.map({}); const auto again = cancel.map(pressed);
         if (!first.mouse_right_new || !first.mouse_right || held.mouse_right_new || !again.mouse_right_new) throw std::runtime_error("Cancel must act as one right-click edge per press");
+        if (!first.keyboard.count(100) || !held.keyboard.count(100) || cancel.map({}).keyboard.count(100))
+            throw std::runtime_error("Cancel must send and release literal Esc for keyboard-only menus");
         MouseClickLatch quick_tap; quick_tap.press(true);
         const auto quick_first = quick_tap.map({}); quick_tap.tick(); const auto quick_held = quick_tap.map({}); quick_tap.tick();
         if (!quick_first.mouse_left_new || !quick_first.mouse_left || quick_held.mouse_left_new || !quick_held.mouse_left || quick_tap.map({}).mouse_left)

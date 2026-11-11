@@ -1,6 +1,7 @@
 # Import a PC save
 
-1. Download `wolf-pc-convert.exe` from the latest private release onto Windows.
+1. Download `PC-save-converter.zip` from the latest private release onto Windows
+   and extract it. The program is `wolf-pc-convert.exe`.
 2. Drag the game's `SaveDataNN.sav` onto it. It creates a `.pc-save.json`
    beside the original. The original stays untouched. Python is not required.
 3. Copy that JSON to **Files → On My iPhone → Monochrome → imports**.

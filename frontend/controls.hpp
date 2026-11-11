@@ -19,6 +19,7 @@ public:
         const bool held = input.cancel;
         input.mouse_right |= held;
         input.mouse_right_new |= held && !held_;
+        if (held) input.keyboard.insert(100); // Literal Esc for the game's A/B-key menus.
         held_ = held;
         return input;
     }
