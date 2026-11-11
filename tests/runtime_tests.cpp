@@ -726,6 +726,70 @@ void automatic_basic_input_is_deferred_and_restored() {
     wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.number(2000001) == 10);
     loaded.tick(); REQUIRE(loaded.number(2000002) == 0); REQUIRE(loaded.error().empty());
 }
+void automatic_mouse_buttons_are_deferred_merged_and_restored() {
+    const auto p = project({cmd(125, {0x20000001}), cmd(125, {0x20000002}), cmd(125, {0x20000004}),
+        cmd(124, {2000000, 12288, 8}), cmd(180, {1}),
+        cmd(124, {2000001, 12288, 7}), cmd(124, {2000002, 12288, 8}), cmd(124, {2000003, 12288, 9}),
+        cmd(123, {2000004, 112}), cmd(123, {2000005, 800}), cmd(180, {1}),
+        cmd(124, {2000006, 12288, 7}), cmd(124, {2000007, 12288, 8}), cmd(124, {2000008, 12288, 9})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000000) == 0); REQUIRE(rt.snapshot().at("pending_auto_mouse_input") == 7);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.error().empty());
+    for (int i = 1; i <= 3; ++i) REQUIRE(loaded.number(2000000 + i) == 2);
+    REQUIRE(loaded.number(2000004) == 0); REQUIRE(loaded.number(2000005) == 21);
+    loaded.tick(); REQUIRE(loaded.error().empty());
+    for (int i = 6; i <= 8; ++i) REQUIRE(loaded.number(2000000 + i) == 0);
+}
+void automatic_mouse_hold_merges_with_player_input_and_survives_resume() {
+    const auto p = project({cmd(125, {0x20000001}), cmd(180, {1}),
+        cmd(124, {2000000, 12288, 7}), cmd(125, {0x20000001}), cmd(180, {1}),
+        cmd(124, {2000001, 12288, 7}), cmd(124, {2000002, 12288, 8}), cmd(123, {2000003, 784}),
+        cmd(180, {1}), cmd(124, {2000004, 12288, 7}), cmd(124, {2000005, 12288, 8})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); rt.tick(); REQUIRE(rt.number(2000000) == 2);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot());
+    wolf::Input physical; physical.mouse_right = physical.mouse_right_new = true; physical.mouse_x = 300; physical.mouse_y = 180;
+    loaded.tick(physical); REQUIRE(loaded.error().empty());
+    REQUIRE(loaded.number(2000001) == 1); REQUIRE(loaded.number(2000002) == 2); REQUIRE(loaded.number(2000003) == 0);
+    physical.mouse_right_new = false; loaded.tick(physical);
+    REQUIRE(loaded.number(2000004) == 0); REQUIRE(loaded.number(2000005) == 1);
+}
+void automatic_mouse_bypasses_device_permission_without_enabling_player_input() {
+    const auto p = project({cmd(126, {0x10000101}), cmd(125, {0x20000001}), cmd(180, {1}),
+        cmd(124, {2000000, 12288, 7}), cmd(124, {2000001, 12288, 8}), cmd(124, {2000002, 12288, 20}),
+        cmd(126, {0x10000101}), cmd(124, {2000003, 12288, 7}), cmd(180, {1}),
+        cmd(124, {2000004, 12288, 7}), cmd(126, {0x10000001}), cmd(124, {2000005, 12288, 8})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick();
+    wolf::Input input; input.mouse_right = input.mouse_right_new = true; input.mouse_x = 300;
+    rt.tick(input); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000000) == 2); REQUIRE(rt.number(2000001) == 0); REQUIRE(rt.number(2000002) == 0);
+    REQUIRE(rt.number(2000003) == 2);
+    rt.tick(input); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000004) == 0); REQUIRE(rt.number(2000005) == 2);
+}
+void automatic_mouse_state_is_optional_and_invalid_operands_are_rejected() {
+    const auto p = project({cmd(125, {0x20000002}), cmd(180, {1}), cmd(124, {2000000, 12288, 8})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); auto old = rt.snapshot(); old.erase("pending_auto_mouse_input");
+    wolf::Runtime loaded(p); loaded.restore(old); loaded.tick(); REQUIRE(loaded.error().empty()); REQUIRE(loaded.number(2000000) == 0);
+    const auto before = loaded.snapshot(); auto bad = before; bad["pending_auto_mouse_input"] = 8;
+    bool rejected = false; try { loaded.restore(bad); } catch (...) { rejected = true; }
+    REQUIRE(rejected); REQUIRE(loaded.snapshot() == before);
+    for (const auto& args : {Json::array({0x20000008}), Json::array({0x20000002, 3}), Json::array({0x30000002})}) {
+        wolf::Runtime invalid(project({cmd(125, args)})); invalid.start_common(0); invalid.tick(); REQUIRE(!invalid.error().empty());
+    }
+}
+void deferred_mouse_does_not_accept_or_cancel_a_new_choice() {
+    for (int button : {1, 2}) {
+        auto p = project({cmd(125, {0x20000000 | button}), cmd(102, {2}, 0, {"One", "Two"}),
+            cmd(401, {2}), cmd(121, {2000000, 10, 0, 0}, 1),
+            cmd(401, {3}), cmd(121, {2000000, 20, 0, 0}, 1),
+            cmd(421), cmd(121, {2000000, 30, 0, 0}, 1), cmd(499)});
+        auto sender = p["common"]["events"][0]; sender["id"] = 1;
+        sender["commands"] = Json::array({cmd(125, {0x20000002})}); p["common"]["events"].push_back(sender);
+        wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(!rt.choice().at("armed").get<bool>());
+        rt.tick(); REQUIRE(!rt.choice().at("done").get<bool>()); rt.tick(); REQUIRE(rt.choice().at("armed").get<bool>());
+        rt.start_common(1); rt.tick(); REQUIRE(!rt.choice().at("done").get<bool>());
+        rt.tick(); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.choice().empty()); REQUIRE(rt.number(2000000) == 30);
+    }
+}
 void opening_press_and_deferred_confirm_cannot_accept_choice() {
     const auto p = project({cmd(125, {1}), cmd(102, {2}, 0, {"one", "two"}),
         cmd(401, {2}), cmd(121, {2000000, 10, 0, 0}, 1),
@@ -941,16 +1005,19 @@ void game_load_discards_pending_work_and_rebases_picture_ages() {
         cmd(290, {48, 20, 1, 1, 0, 10, 99999}),
         cmd(150, {1, 1, 0, 1, 1, 1, 255, 90, 90, 100, 0, 0, 0, 10}),
         cmd(140, {0x02000020, 10, 0, 0, 100, 100}, 0, {"se.wav"}),
+        cmd(125, {0x20000002}),
         cmd(220, {0, 3}), cmd(180, {1000})});
     auto loader = p["common"]["events"][0]; loader["id"] = 1;
     loader["commands"] = Json::array({cmd(220, {1, 3})}); p["common"]["events"].push_back(loader);
     wolf::Runtime rt(p, base.u8string()); rt.start_common(0); rt.tick();
     REQUIRE(rt.error().empty()); const auto initial = rt.snapshot();
     REQUIRE(initial.at("pending_picture_changes").size() == 1); REQUIRE(initial.at("pending_audio").size() == 1);
+    REQUIRE(initial.at("pending_auto_mouse_input") == 2);
     for (int i = 0; i < 25; ++i) rt.tick();
     rt.start_common(1); rt.tick(); REQUIRE(rt.error().empty()); const auto loaded = rt.snapshot();
     REQUIRE(loaded.at("runs").empty()); REQUIRE(loaded.at("routes").empty());
     REQUIRE(loaded.at("pending_picture_changes").empty()); REQUIRE(loaded.at("pending_audio").empty());
+    REQUIRE(loaded.at("pending_auto_mouse_input") == 0);
     REQUIRE(rt.pictures().at("1").at("x") == 20); REQUIRE(rt.frame() == 27);
     REQUIRE(wolf::picture_draw_offset(rt.pictures().at("1"), 28) == wolf::picture_draw_offset(initial.at("pictures").at("1"), 1));
     std::filesystem::remove_all(base);
@@ -1232,6 +1299,11 @@ int main() {
         attack_pattern_ignores_inactive_operand_and_commits_final_frame();
         basic_and_mouse_input_permissions();
         automatic_basic_input_is_deferred_and_restored(); choice_mouse_selects_clicked_row_and_rejects_outside_click();
+        automatic_mouse_buttons_are_deferred_merged_and_restored();
+        automatic_mouse_hold_merges_with_player_input_and_survives_resume();
+        automatic_mouse_bypasses_device_permission_without_enabling_player_input();
+        automatic_mouse_state_is_optional_and_invalid_operands_are_rejected();
+        deferred_mouse_does_not_accept_or_cancel_a_new_choice();
         opening_press_and_deferred_confirm_cannot_accept_choice(); mouse_query_distinguishes_new_held_and_released();
         unrecognized_message_escapes_are_literal_text();
         image_dimensions_cache_before_path_lookup_and_invalidate();
@@ -1266,6 +1338,6 @@ int main() {
         choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click(); entirely_empty_choice_skips_all_of_its_branches();
         sound_preload_and_release_do_not_start_playback_or_change_music_state(); se_stop_cancels_reserved_sounds_only_on_its_channel();
         sound_database_variable_resolves_original_track_metadata();
-        std::cout << "93 native runtime tests passed\n"; return 0;
+        std::cout << "98 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

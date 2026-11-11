@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-11",
+  "scope": "Shared runtime automatic mouse-button input; neutral fixtures only",
+  "reported_command": {"code": 125, "args": [536870914], "offset": 1072769},
+  "cause": "The runtime accepted only the basic-input bit mask and rejected the separate mouse-button mode.",
+  "implementation": {
+    "buttons": ["left", "right", "middle"],
+    "deferred_ticks": 1,
+    "same_tick_commands": "combine button masks",
+    "consecutive_ticks": "held state, one new-press edge",
+    "physical_input": "merged without generating basic Confirm/Cancel",
+    "device_permission": "simulated clicks bypass the player mouse-device prohibition, matching Windows",
+    "state": "optional pending_auto_mouse_input field; older version-6 snapshots default to zero; ordinary game load clears reservations",
+    "new_choices": "opening and reserved clicks cannot accidentally select or cancel a newly opened choice"
+  },
+  "reference": {
+    "manual": "https://silversecond.com/WolfRPGEditor/Help/04ev_keyinput.html",
+    "engine": "Supplied Windows executable, isolated synthetic event and empty map",
+    "checks": {
+      "same_tick_right": [0, 0, 0],
+      "next_tick_right": [0, 2, 0],
+      "released_right": [0, 0, 0],
+      "left": [2, 0, 0],
+      "middle": [0, 0, 2],
+      "all": [2, 2, 2],
+      "separate_left_and_right": [2, 2, 0],
+      "first_consecutive_left": [2, 0, 0],
+      "second_consecutive_left": [1, 0, 0],
+      "released_left": [0, 0, 0],
+      "right_with_mouse_device_disabled": [0, 2, 0],
+      "right_with_mouse_device_enabled": [0, 2, 0]
+    },
+    "basic_input_in_all_mouse_cases": 0,
+    "original_files_restored": true
+  },
+  "local_checks": {
+    "release_build": "pass, including the iOS C++ frontend compilation paths",
+    "runtime_scenarios": 98,
+    "ctest_suites_passed": ["native-runtime", "native-screenshots", "native-audio"],
+    "python_tests_passed": 14,
+    "neutral_full_frontend": "12 controls visible in both direct and trackpad modes; delayed show, erase/show, non-cursor picture ID 10000 and high-layer picture IDs checked by pixels"
+  },
+  "limitations": [
+    "No device test of this update",
+    "The supplied scene/save was not replayed",
+    "The reported missing scene buttons remain undiagnosed; the input correction is not evidence that their visibility is fixed",
+    "Automatic cursor movement, wheel input and literal-keyboard simulation are not added by this change"
+  ]
+}

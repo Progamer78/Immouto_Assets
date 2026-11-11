@@ -339,6 +339,8 @@ void Runtime::tick(const Input& input) {
     const std::array<int, 7> auto_bits{1, 2, 4, 16, 32, 64, 128};
     for (std::size_t i = 0; i < auto_buttons.size(); ++i) raw_input_.*auto_buttons[i] |= (pending_auto_input_ & auto_bits[i]) != 0;
     pending_auto_input_ = 0;
+    auto_mouse_input_ = pending_auto_mouse_input_;
+    pending_auto_mouse_input_ = 0;
     apply_input_permissions();
     try {
         if (!file_operations_.empty()) fail("Pending game file operation requires the native renderer");
@@ -391,6 +393,14 @@ void Runtime::apply_input_permissions() {
         input_.mouse_left_new = input_.mouse_right_new = false; input_.wheel = 0;
         input_.mouse_x = previous_input_.mouse_x; input_.mouse_y = previous_input_.mouse_y;
     }
+    // Device permissions block player input. Like the Windows engine, an
+    // event's simulated mouse buttons still apply for this frame. Consecutive
+    // simulated presses remain held rather than producing fresh click edges.
+    input_.mouse_left |= (auto_mouse_input_ & 1) != 0;
+    input_.mouse_right |= (auto_mouse_input_ & 2) != 0;
+    input_.mouse_middle |= (auto_mouse_input_ & 4) != 0;
+    input_.mouse_left_new |= (auto_mouse_input_ & 1) && !previous_input_.mouse_left;
+    input_.mouse_right_new |= (auto_mouse_input_ & 2) && !previous_input_.mouse_right;
 }
 
 void Runtime::advance(Run& run) {
@@ -834,7 +844,7 @@ void Runtime::show_choice(Run& run, const Json& cmd) {
             // following tick. Do not let the press opening this menu (including
             // that deferred input) accept its first entry before release.
             {"armed", !(input_.confirm || input_.cancel || input_.mouse_left || input_.mouse_right ||
-                input_.mouse_left_new || input_.mouse_right_new || (pending_auto_input_ & 3))},
+                input_.mouse_left_new || input_.mouse_right_new || (pending_auto_input_ & 3) || (pending_auto_mouse_input_ & 3))},
             {"x", number(9000003)}, {"y", number(9000004)}};
         set_number(9000020, choice_.at("selected"));
         prepare_choice_layout();
@@ -884,7 +894,7 @@ void Runtime::advance_choice() {
     if (choice_.empty() || choice_.at("done") == true || choice_.at("opened").get<std::uint64_t>() == frame_) return;
     if (!choice_.value("armed", true)) {
         if (!(input_.confirm || input_.cancel || input_.mouse_left || input_.mouse_right ||
-            input_.mouse_left_new || input_.mouse_right_new || (pending_auto_input_ & 3))) choice_["armed"] = true;
+            input_.mouse_left_new || input_.mouse_right_new || (pending_auto_input_ & 3) || (pending_auto_mouse_input_ & 3))) choice_["armed"] = true;
         return;
     }
     const int count = static_cast<int>(choice_.at("strings").size());
@@ -1323,8 +1333,10 @@ void Runtime::execute(Run& run, const Json& cmd) {
     }
     case 125: {
         const int options = arg(cmd, 0);
-        if (cmd.at("args").size() != 1 || (options & ~247)) fail("Automatic keyboard/mouse input is not implemented");
-        pending_auto_input_ |= options;
+        if (cmd.at("args").size() != 1 || !cmd.at("strings").empty()) fail("Unsupported automatic-input operands");
+        if ((options & ~247) == 0) pending_auto_input_ |= options;
+        else if ((options & ~7) == 0x20000000) pending_auto_mouse_input_ |= options & 7;
+        else fail("Unsupported automatic-input mode or mouse movement operands");
         return;
     }
     case 126: {
@@ -1524,7 +1536,8 @@ Json Runtime::snapshot() const {
         {"runs", runs}, {"rng", rng.str()}, {"message", message_}, {"transition", transition_},
         {"characters", characters_}, {"party", party_}, {"routes", routes}, {"next_route", next_route_},
         {"pending_picture_erases", pending_picture_erases_}, {"pending_picture_changes", pending_picture_changes_}, {"choice", choice_}, {"choice_clear_after", choice_clear_after_}, {"message_state", message_state_}, {"music", music_},
-        {"input_permissions", input_permissions_}, {"mouse_enabled", mouse_enabled_}, {"pending_auto_input", pending_auto_input_}, {"pending_audio", pending_audio_},
+        {"input_permissions", input_permissions_}, {"mouse_enabled", mouse_enabled_}, {"pending_auto_input", pending_auto_input_},
+        {"pending_auto_mouse_input", pending_auto_mouse_input_}, {"pending_audio", pending_audio_},
         {"previous_input", {{"up", previous_input_.up}, {"down", previous_input_.down}, {"left", previous_input_.left}, {"right", previous_input_.right},
             {"confirm", previous_input_.confirm}, {"cancel", previous_input_.cancel}, {"sub", previous_input_.sub},
             {"mouse_left", previous_input_.mouse_left}, {"mouse_right", previous_input_.mouse_right}, {"mouse_middle", previous_input_.mouse_middle},
@@ -1549,6 +1562,7 @@ void Runtime::restore(const Json& state) {
     candidate.input_permissions_ = state.at("input_permissions").get<std::array<int, 7>>();
     candidate.mouse_enabled_ = state.at("mouse_enabled");
     candidate.pending_auto_input_ = state.at("pending_auto_input");
+    candidate.pending_auto_mouse_input_ = state.value("pending_auto_mouse_input", 0);
     candidate.pending_audio_ = state.value("pending_audio", Json::array());
     candidate.music_ = state.value("music", Json::object());
     candidate.resume_music();
@@ -1558,6 +1572,7 @@ void Runtime::restore(const Json& state) {
         if (pending.at("event").at("kind") != 2 || pending.at("event").at("operation") != "play") fail("Invalid saved delayed sound event");
     }
     if (candidate.pending_auto_input_ & ~247) fail("Invalid saved automatic input");
+    if (candidate.pending_auto_mouse_input_ & ~7) fail("Invalid saved automatic mouse input");
     for (int mode : candidate.input_permissions_) if (mode < 0 || mode > 2) fail("Invalid saved input permissions");
     if (!candidate.message_state_.empty()) {
         const int visible = candidate.message_state_.at("visible"), total = candidate.message_state_.at("total");

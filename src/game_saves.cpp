@@ -61,6 +61,7 @@ void Runtime::apply_game_load() {
     state["pending_picture_changes"] = state["pending_picture_erases"] = state["pending_audio"] = Json::array();
     state["message"] = ""; state["message_state"] = state["choice"] = Json::object();
     state["choice_clear_after"] = 0; state["pending_auto_input"] = 0;
+    state["pending_auto_mouse_input"] = 0;
     state["numbers"]["9000012"] = 0; state["numbers"]["9000020"] = -1;
     const auto current_input = input_, current_raw = raw_input_;
     flush_saves();

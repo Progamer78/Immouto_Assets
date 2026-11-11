@@ -122,6 +122,7 @@ private:
     std::array<int, 7> input_permissions_{};
     bool mouse_enabled_ = true;
     int pending_auto_input_ = 0;
+    int pending_auto_mouse_input_ = 0, auto_mouse_input_ = 0;
     std::string error_, message_;
     Json warnings_ = Json::array();
     Json debug_text_ = Json::array();

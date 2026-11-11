@@ -1,5 +1,7 @@
 # Continue the native iOS port
 
+Current follow-up: shared command125 automatic mouse-button support passes neutral Windows reference checks, 98 runtime scenarios, all three local SDL/core suites and 14 Python tests. Mouse bits1/2/4 in mode0x20000000 queue for the next tick, combine, remain held across repeated ticks, bypass player-device prohibition and never synthesize basic Confirm/Cancel. New-choice arming and old/manual/full-load state compatibility are covered. Neutral full-frontend pixel checks render 12 controls in direct and trackpad modes. See reports/automatic_mouse_validation.json. The reported missing scene controls remain undiagnosed; do not claim this input fix restores them. No supplied scene was replayed in this follow-up. Original IR and assets remain unchanged.
+
 Production source: b71da652f0524e5e2723326dc391e2ab944e2166 (2026-11-11).
 Latest release: https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1
 IPA 1,095,920 bytes; SHA-256 79bf3e1bc419e7004886bc4fd3429a2029915a2ad89142a1461e3c4d1c8f8489.
