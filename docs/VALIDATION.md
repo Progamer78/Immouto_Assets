@@ -121,4 +121,3 @@ The earlier Communication continuation checked for errors but did not assert the
 Isolated Windows fixtures confirm that a deferred automatic Confirm immediately before a new choice leaves the choice open; unknown escapes display literally; and six relevant text heights are 14,14,16,10,20,20. Native text dimensions match those heights, including the ATK value with a trailing newline. Pixel-level font identity is not claimed. A native file-read/message fixture renders English/RandomEvent01-05.txt, the source of the reported message error, without changing its contents.
 
 Both local Release builds pass 77 runtime scenarios. SDL tests cover trackpad movement without clicking, tap/release edges, long-press right-click, bounds clamping and direct taps released between ticks. Native mouse-mode startup/cursor presentation passes from home 12650 to 12660. Physical iPhone gestures and full-game progression still require testing.
-

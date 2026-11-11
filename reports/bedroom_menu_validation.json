@@ -127,5 +127,45 @@
     "time_and_ap_unchanged": true,
     "capture_sha256": "944fd6e428bec9dc35857de11ecb47fce389e5e6cb4345c4d243f21f22a51ba5"
   },
-  "game_ir_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c"
+  "game_ir_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c",
+  "source_commit": "c46d6eb631aa4a6d693a0586f410659f7d9ba93a",
+  "ios_release": {
+    "run": "https://github.com/Progamer78/Immouto_Assets/actions/runs/42955009342",
+    "head_sha": "c46d6eb631aa4a6d693a0586f410659f7d9ba93a",
+    "release": "https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-10-1",
+    "bytes": 1013382,
+    "sha256": "34b2ea01eca6dbf52e079623dc36a0ac36654b2c57f3bc35ef7486a871b65329",
+    "arm64_verified": true,
+    "zip_crc_verified": true,
+    "bundle_id": "com.local.monochromeport",
+    "minimum_ios": "15.0",
+    "game_assets_included": false,
+    "signed": false,
+    "device_tested": false,
+    "run_seconds": 40.0,
+    "steps_seconds": {
+      "Set up job": 1.0,
+      "Run actions/checkout@v4": 1.0,
+      "Record build tools": 0.0,
+      "Reuse compiled iOS dependencies": 2.0,
+      "Generate native ARM64 Xcode project": 6.0,
+      "Build unsigned device application": 19.0,
+      "Package unsigned IPA": 1.0,
+      "Publish IPA to a private release": 3.0,
+      "Upload small build metadata": 1.0,
+      "Post Reuse compiled iOS dependencies": 0.0,
+      "Post Run actions/checkout@v4": 0.0,
+      "Complete job": 1.0
+    }
+  },
+  "source_ci": {
+    "run": "https://github.com/Progamer78/Immouto_Assets/actions/runs/42954986304",
+    "source_commit": "c46d6eb631aa4a6d693a0586f410659f7d9ba93a",
+    "jobs": {
+      "core_macos": "success",
+      "core_linux": "success",
+      "core_windows": "success",
+      "frontend_macos": "success"
+    }
+  }
 }
