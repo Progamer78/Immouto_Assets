@@ -121,6 +121,10 @@ Json& Runtime::cell(int ref) {
 
 std::int32_t Runtime::number(int ref, Context c) {
     if (ref < 1000000) return ref;
+    if (!number_freezes_.empty()) {
+        const auto frozen = number_freezes_.find(ref);
+        if (frozen != number_freezes_.end()) return frozen->second;
+    }
     if (ref >= 1000000000) {
         auto& value = cell(ref);
         if (!value.is_number_integer()) fail("Numeric read of a string database field");
@@ -138,12 +142,25 @@ std::int32_t Runtime::number(int ref, Context c) {
 }
 
 void Runtime::set_number(int ref, std::int32_t value, Context c) {
+    if (!number_freezes_.empty()) {
+        const auto frozen = number_freezes_.find(ref);
+        if (frozen != number_freezes_.end()) value = frozen->second;
+    }
     if (ref == 9000029) { play_time_ticks_ = static_cast<std::uint64_t>(std::max(0, value)) * project_->at("game").at("fps").get<int>(); return; }
     if (ref >= 1000000000) {
         auto& field = cell(ref);
         if (!field.is_number_integer()) fail("Numeric write to a string database field");
         field = value;
     } else numbers_[key(ref, c)] = value;
+}
+
+void Runtime::set_number_freezes(const std::map<int, std::int32_t>& values) {
+    for (const auto& [ref, value] : values) {
+        (void)value;
+        if (ref < 2000000 || ref >= 3000000) fail("Only global numeric game variables can be frozen");
+    }
+    number_freezes_ = values;
+    for (const auto& [ref, value] : values) numbers_[static_cast<unsigned>(ref)] = value;
 }
 
 std::string Runtime::text(int ref, Context c) {
@@ -651,6 +668,18 @@ void Runtime::advance_pictures() {
     }
     for (auto it = pictures_.begin(); it != pictures_.end();) {
         auto& picture = it.value();
+        if (picture.contains("pattern_effect")) {
+            const auto& effect = picture.at("pattern_effect");
+            const auto start = effect.at("start").get<std::uint64_t>();
+            const auto interval = effect.at("interval").get<std::uint64_t>();
+            const int first = effect.at("first"), last = effect.at("last");
+            if (effect.at("type") == 8 && frame_ >= start &&
+                (frame_ - start) / interval >= static_cast<unsigned>(std::abs(last - first) + 1)) {
+                // In the supplied 3.191 engine a one-shot animation commits
+                // its final pattern. Loop/ping-pong effects leave the base alone.
+                picture["pattern"] = last; picture.erase("pattern_effect");
+            }
+        }
         if (picture.contains("draw_shift") && picture.at("draw_shift").contains("tween")) {
             auto& shift = picture["draw_shift"]; const auto& tween = shift.at("tween");
             const auto age = std::min(frame_ - tween.at("start").get<std::uint64_t>(), tween.at("duration").get<std::uint64_t>());
@@ -701,7 +730,10 @@ void Runtime::picture_effect(const Json& cmd, Context c) {
     if (type == 2 && color.at(2) != 0) fail("Unsupported picture-shift extra operand");
     if (type == 3 && color.at(2).get<int>() < 0) fail("Negative picture-shake repeat count is not implemented");
     if (type == 7 && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Nonzero automatic picture zoom is not implemented");
-    if (type >= 8 && (color.at(2) != 0 || (duration && (color.at(0).get<int>() < 1 || color.at(1).get<int>() < 1)))) fail("Unsupported automatic picture-pattern operands");
+    // The third parameter is an inactive editor field for pattern effects.
+    // This game's attack records retain 50 there; Game.exe ignores it.
+    if (type >= 8 && type <= 10 && duration && (color.at(0).get<int>() < 1 || color.at(1).get<int>() < 1))
+        fail("Unsupported automatic picture-pattern operands");
     for (auto& picture : pictures_) {
         const int id = picture.at("id");
         if (id < std::min(first, last) || id > std::max(first, last)) continue;
@@ -961,7 +993,7 @@ int picture_pattern(const Json& picture, std::uint64_t frame) {
     const auto age = frame - effect.at("start").get<std::uint64_t>();
     const auto elapsed = age / effect.at("interval").get<std::uint64_t>();
     const int count = std::abs(last - first) + 1, type = effect.at("type");
-    if (type == 8 && elapsed >= static_cast<unsigned>(count)) return picture.at("pattern");
+    if (type == 8 && elapsed >= static_cast<unsigned>(count)) return last;
     int step = static_cast<int>(elapsed % count);
     if (type == 10 && count > 1) {
         step = static_cast<int>(elapsed % (2 * count - 2)); if (step >= count) step = 2 * count - 2 - step;
@@ -1543,6 +1575,7 @@ void Runtime::restore(const Json& state) {
     std::istringstream rng(state.at("rng").get<std::string>());
     if (!(rng >> candidate.random_)) fail("Save contains invalid RNG state");
     candidate.message_ = state.at("message");
+    candidate.set_number_freezes(number_freezes_);
     *this = std::move(candidate);
 }
 }

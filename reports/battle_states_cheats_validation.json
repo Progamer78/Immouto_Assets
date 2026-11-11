@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-11",
+  "project_id": "67778d5a6703906a",
+  "game_json_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c",
+  "original_data_changed": false,
+  "reported_failure": {
+    "common": 242,
+    "offset": 1587606,
+    "command": 290,
+    "args": [128, 3, 5000, 5000, 1, 5, 50],
+    "fix": "Inactive third pattern operand is ignored. Supplied Game.exe reference samples with 0 and 50 agree; one-shot completion commits the final pattern. Loop and ping-pong retain their base pattern."
+  },
+  "additional_battle_fixes": [
+    "Subtractive picture blending used by enemy defeat: GPU reverse subtraction, software-renderer pixel fallback.",
+    "Routes sent by a parallel common event address the target map event's self variables, including event 30's attack-meter reset."
+  ],
+  "gameplay_validation": {
+    "source": "User's normal slot 4, loaded through the original title Load menu; advanced from Day 3 evening to Day 4 community-work battle using inputs.",
+    "stats_or_story_data_edited": false,
+    "cheats_used": false,
+    "primary": {"attack_checkpoint": 57749, "outcome_checkpoint": 60249, "result": "Player attack defeats Stray Boar and returns to normal home gameplay without compatibility stops."},
+    "additional": {"start": 56439, "guard_checkpoint": 57639, "outcome_checkpoint": 60439, "result": "Guard, enemy action and another party attack exercised; battle exits and normal home dialogue resumes."},
+    "local_evidence": "build/device-battle-loaded/*-input.json and *-state.json; user's save and error logs remain ignored local files.",
+    "coverage_limit": "This verifies the reported fight and selected actions, not all bosses, skills or later battles."
+  },
+  "save_states": {
+    "slots": 3,
+    "location": "Documents/states/slot1.json through slot3.json",
+    "files_app_enabled": true,
+    "normal_save_files_replaced": false,
+    "automatic_startup_loading": false,
+    "tests": ["Choice and active attack animation retained", "Load recovers a halted runtime", "Failed save preserves the earlier state", "Incompatible load leaves current progress unchanged", "Normal-save sentinel unchanged", "Headless runner accepts Files-shareable state envelope and advances real game from 60439 to 60441"],
+    "limitations": "Normal on-disk saves are not rewound. Cheat settings remain independent. In-flight sound effects stop; saved background music resumes at its saved position."
+  },
+  "cheats": {
+    "default_enabled": false,
+    "quick_controls": ["Money", "AP", "Vigor", "Battle score"],
+    "features": ["Set signed integer value", "Add 100", "Refill known maximum", "Variable-number editor", "Freeze/unfreeze", "Pin/unpin", "Optional pinned HUD", "Disable cheats"],
+    "tests": ["Frozen values resist both reads and writes during an event", "Editing a frozen value updates the lock", "Freeze survives game load and return to title", "Disabling releases the lock", "Settings and pins persist separately", "System-variable freezes rejected"],
+    "settings": "Documents/cheats.json"
+  },
+  "local_timing": {
+    "environment": "Windows Release SDL software renderer; real-time pacing, 180 rendered ticks per run. Not an iPhone measurement.",
+    "off": {"fps": 60.000003, "cpu_ms": 5.2874, "game_ms": 3.1515, "slow_frames": 0},
+    "four_freezes_and_pinned_hud": {"fps": 60.0, "cpu_ms": 5.3533, "game_ms": 3.2414, "slow_frames": 0}
+  },
+  "checks": {"native_runtime_cases": 87, "core_release": "passed", "app_runtime_renderer_audio": "passed", "python_tests": 14, "accelerated_battle_replay": "passed on Windows direct3d", "iOS_build": "pending", "new_features_device_tested": false}
+}

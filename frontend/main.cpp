@@ -14,6 +14,8 @@
 #include "performance.hpp"
 #include "picture_geometry.hpp"
 #include "picture_render.hpp"
+#include "picture_blend.hpp"
+#include "play_tools_ui.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -225,27 +227,32 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         }
         if (group[2] == 0) continue;
         const int blend = p.at("blend");
-        if (blend == 2 || blend > 3) throw std::runtime_error("Unsupported picture blend mode");
-        if (SDL_SetTextureBlendMode(texture.value, blend == 1 ? SDL_BLENDMODE_ADD : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND) != 0)
+        if (blend < 0 || blend > 3) throw std::runtime_error("Unsupported picture blend mode");
+        const auto mode = blend == 1 ? SDL_BLENDMODE_ADD : blend == 2 ? subtractive_blend() : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND;
+        const bool software_subtract = blend == 2 && (line ? SDL_SetRenderDrawBlendMode(renderer, mode) : SDL_SetTextureBlendMode(texture.value, mode)) != 0;
+        if (SDL_SetTextureBlendMode(texture.value, software_subtract ? SDL_BLENDMODE_BLEND : mode) != 0)
             throw std::runtime_error(SDL_GetError());
         SDL_SetTextureAlphaMod(texture.value, static_cast<Uint8>(blend == 3 ? 255 : std::clamp(p.at("opacity").get<int>(), 0, 255)));
         const auto drawing_tint = brighten ? std::array<double, 3>{100, 100, 100} : tint;
         SDL_SetTextureColorMod(texture.value, static_cast<Uint8>(drawing_tint[0] * 255 / 100),
             static_cast<Uint8>(drawing_tint[1] * 255 / 100), static_cast<Uint8>(drawing_tint[2] * 255 / 100));
-        if (line) {
-            SDL_SetRenderDrawBlendMode(renderer, blend == 1 ? SDL_BLENDMODE_ADD : blend == 3 ? SDL_BLENDMODE_MOD : SDL_BLENDMODE_BLEND);
+        auto draw = [&] {
+          if (line) {
+            SDL_SetRenderDrawBlendMode(renderer, software_subtract ? SDL_BLENDMODE_BLEND : mode);
             SDL_SetRenderDrawColor(renderer, static_cast<Uint8>(std::clamp(tint[0] * 255 / 100, 0.0, 255.0)), static_cast<Uint8>(std::clamp(tint[1] * 255 / 100, 0.0, 255.0)),
                 static_cast<Uint8>(std::clamp(tint[2] * 255 / 100, 0.0, 255.0)), static_cast<Uint8>(blend == 3 ? 255 : std::clamp(p.at("opacity").get<int>(), 0, 255)));
             if (SDL_RenderDrawLineF(renderer, destination.x, destination.y, destination.x + destination.w, destination.y + destination.h) != 0)
                 throw std::runtime_error(SDL_GetError());
-            continue;
-        }
-        if (window && !builtin) {
+            return;
+          }
+          if (window && !builtin) {
             const auto flip = normalize_picture_area(destination);
             draw_window_skin(renderer, texture.value, texture.width, texture.height, destination, std::abs(zoom) * group[2], std::abs(zoom_y) * group[2], flip);
-            continue;
-        }
-        draw_picture_copy(renderer, texture.value, &source, destination, window ? 0 : p.at("angle").get<double>() / 10);
+            return;
+          }
+          draw_picture_copy(renderer, texture.value, &source, destination, window ? 0 : p.at("angle").get<double>() / 10);
+        };
+        if (software_subtract) draw_subtractive(renderer, draw); else draw();
     }
 }
 
@@ -296,17 +303,20 @@ void draw_controls_toggle(SDL_Renderer* renderer, presentation::Rect rect) {
 int show_app_menu(SDL_Window* window, bool mouse_mode, bool show_performance) {
     const SDL_MessageBoxButtonData buttons[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Keep playing"},
         {0, 1, "Return to title"}, {0, 2, mouse_mode ? "Use direct touch" : "Enable mouse mode"},
-        {0, 3, show_performance ? "Hide FPS monitor" : "Show FPS monitor"}};
+        {0, 3, show_performance ? "Hide FPS monitor" : "Show FPS monitor"}, {0, 4, "Save states"}, {0, 5, "Cheats"}};
     const SDL_MessageBoxData box{SDL_MESSAGEBOX_INFORMATION, window, "Game menu",
-        "Mouse mode: drag to move the cursor, tap to click, hold then release to right-click.", 4, buttons, nullptr};
+        "Mouse mode: drag to move the cursor, tap to click, hold then release to right-click.", 6, buttons, nullptr};
     int selected = 0;
     if (SDL_ShowMessageBox(&box, &selected) != 0) return 0;
+    play_tools::finish_modal(window);
     if (selected == 1) {
         const SDL_MessageBoxButtonData confirm[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Keep playing"}, {0, 1, "Return to title"}};
         const SDL_MessageBoxData question{SDL_MESSAGEBOX_WARNING, window, "Return to title?",
             "Unsaved progress will be lost. Your saved slots are kept.", 2, confirm, nullptr};
         int answer = 0;
-        if (SDL_ShowMessageBox(&question, &answer) != 0 || answer != 1) return 0;
+        const bool success = SDL_ShowMessageBox(&question, &answer) == 0;
+        play_tools::finish_modal(window);
+        if (!success || answer != 1) return 0;
     }
     return selected;
 }
@@ -319,6 +329,8 @@ void capture_frame(SDL_Renderer* renderer, const char* filename, const wolf::Run
     if (!surface || SDL_RenderReadPixels(renderer, nullptr, surface->format->format, surface->pixels, surface->pitch) != 0 ||
         SDL_SaveBMP(surface.get(), filename) != 0) throw std::runtime_error(SDL_GetError());
     auto evidence = runtime.diagnostics(); evidence["picture_records"] = runtime.pictures();
+    SDL_RendererInfo renderer_info{};
+    if (SDL_GetRendererInfo(renderer, &renderer_info) == 0) evidence["frontend_renderer"] = renderer_info.name;
     evidence["frontend_performance"] = {{"real_time", real_time}, {"fps", timing.fps}, {"frame_ms", timing.frame_ms},
         {"cpu_ms", timing.work_ms}, {"game_ms", timing.game_ms}, {"peak_ms", timing.peak_ms}, {"slow_frames", timing.slow}};
     wolf::atomic_save(std::string(filename) + ".json", evidence);
@@ -433,6 +445,16 @@ int main(int argc, char** argv) {
             }
         }
         Lifecycle lifecycle(&runtime, save_path);
+        play_tools::SaveStates manual_states(storage);
+        std::unique_ptr<play_tools::Cheats> cheats;
+        try { cheats = std::make_unique<play_tools::Cheats>(storage); }
+        catch (const std::exception& error) {
+            SDL_Log("Cheat settings ignored: %s", error.what());
+            const auto rejected = storage / ("cheats-rejected-" + std::to_string(SDL_GetPerformanceCounter()) + ".json");
+            fs::rename(storage / "cheats.json", rejected);
+            cheats = std::make_unique<play_tools::Cheats>(storage);
+        }
+        cheats->apply(runtime);
         auto& paused = lifecycle.paused;
         bool running = true;
         auto seconds = [] { return static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency(); };
@@ -578,6 +600,7 @@ int main(int argc, char** argv) {
                 input.mouse_x = input.mouse_y = -1;
             }
             if (open_menu) {
+                audio.pause(true);
                 const int selected = show_app_menu(window, mouse_mode, show_performance);
                 if (selected == 1) {
                     std::lock_guard<std::mutex> lock(lifecycle.guard);
@@ -585,6 +608,25 @@ int main(int argc, char** argv) {
                 }
                 if (selected == 2) { mouse_mode = !mouse_mode; save_controls(); }
                 if (selected == 3) { show_performance = !show_performance; save_controls(); }
+                if (selected == 4) {
+                    play_tools::Cursor cursor{trackpad.x, trackpad.y};
+                    if (play_tools::save_states_menu(window, manual_states, runtime, cursor, lifecycle.guard)) {
+                        trackpad.x = cursor.x; trackpad.y = cursor.y; compatibility_notice = false;
+                        wolf::Json stops = wolf::Json::array();
+                        for (int kind = 0; kind < 3; ++kind) stops.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1}, {"fade_ms", 0}});
+                        audio.process(stops, {100, 100, 100});
+                        audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
+                    }
+                }
+                if (selected == 5) play_tools::cheats_menu(window, *cheats, runtime, [&](const std::string& text) {
+                    SDL_SetRenderTarget(renderer, nullptr); SDL_RenderSetLogicalSize(renderer, 1024, screen_height);
+                    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255); SDL_RenderClear(renderer);
+                    auto& texture = assets.text_picture({{"content", text}, {"text_style", {{"size",20}, {"speed",0}, {"shadow",0}, {"antialias",0}}}}, "$number-prompt");
+                    SDL_SetTextureBlendMode(texture.value, SDL_BLENDMODE_BLEND); SDL_SetTextureColorMod(texture.value, 255, 255, 255); SDL_SetTextureAlphaMod(texture.value, 255);
+                    SDL_FRect rect{40, 80, static_cast<float>(texture.width), static_cast<float>(texture.height)};
+                    SDL_RenderCopyF(renderer, texture.value, nullptr, &rect); SDL_RenderPresent(renderer);
+                }, lifecycle.guard);
+                audio.pause(paused || !runtime.error().empty());
                 trackpad.reset();
                 pad_touch_active = false;
                 direct_click.reset();
@@ -689,13 +731,16 @@ int main(int argc, char** argv) {
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawLinesF(renderer, arrow, 5);
             }
             draw_controls_toggle(renderer, controls_toggle.bounds(display.safe, toggle_size));
-            if (show_performance) {
+            if (show_performance || (cheats->enabled && cheats->show_pins)) {
                 if (now >= monitor_update) {
                     const auto reading = metrics.read(fps);
                     char text[220];
                     std::snprintf(text, sizeof(text), "%.1f FPS  %.1f ms\nCPU %.1f ms  Game %.1f ms\nPeak %.1f ms  Slow %d", reading.fps, reading.frame_ms,
                         reading.work_ms, reading.game_ms, reading.peak_ms, reading.slow);
-                    monitor_text = text; monitor_update = now + .25;
+                    monitor_text = show_performance ? text : "";
+                    const auto pins = play_tools::pinned_hud(*cheats, runtime);
+                    if (!pins.empty()) { if (!monitor_text.empty()) monitor_text += '\n'; monitor_text += pins; }
+                    monitor_update = now + .25;
                 }
                 draw_performance(renderer, assets, monitor_text, display, density);
             }
@@ -724,6 +769,7 @@ int main(int argc, char** argv) {
             try {
                 Json diagnostic = active_runtime ? active_runtime->diagnostics() : Json::object();
                 diagnostic["frontend_error"] = error.what();
+                if (active_runtime) diagnostic["picture_records"] = active_runtime->pictures();
                 wolf::atomic_save((storage / "last-error.json").u8string(), diagnostic);
             } catch (...) { SDL_Log("Could not persist the error diagnostic"); }
         }

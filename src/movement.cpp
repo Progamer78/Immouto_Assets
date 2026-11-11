@@ -103,7 +103,11 @@ void Runtime::start_route(Run& run, const Json& cmd) {
     if (options & ~6) fail("Repeating/unknown character-route options are not implemented");
     Route route; route.id = next_route_++; route.source = cmd;
     route.context = run.stack.back().context;
-    route.target = character_key(number(cmd.at("args").at(0), route.context), route.context);
+    const int target = number(cmd.at("args").at(0), route.context);
+    route.target = character_key(target, route.context);
+    // Route instructions act on the addressed map event's self variables,
+    // including when a parallel common event sends the route (battle meter reset).
+    if (target >= 0) { route.context.event = target; route.context.map = map_; }
     // A new route replaces an older route for the same character. A waiter on
     // that old route is released; it must not start waiting on the replacement.
     routes_.erase(std::remove_if(routes_.begin(), routes_.end(), [&](const Route& r) { return r.target == route.target; }), routes_.end());

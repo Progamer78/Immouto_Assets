@@ -72,6 +72,10 @@ This development mode temporarily keeps a bundled and a persistent copy on the f
 
 On iPhone, the app's folder is exposed in **Files -> On My iPhone -> Monochrome**. `last-error.json` records event/command failures and original byte offsets; `crashes.txt` records best-effort fatal-signal breadcrumbs. The event diagnostic is tested locally. Native crash logging and Files access still need device testing. Windows diagnostics use SDL's preference directory; developers can set `WOLF_STORAGE_DIR` to a workspace directory while testing.
 
+The bottom **Menu -> Save states** provides three separate snapshots of the current moment, including active dialogue, choices and animations. Save or load a state without replacing normal save slots. After saving, find `states/slot1.json` through `slot3.json` in the app's Files folder; long-press a file and choose Share to send it for troubleshooting. Normal launches still use the title screen. Loading a state restores game memory; ordinary save files and cheat settings remain separate.
+
+**Menu -> Cheats** is off by default. Enable it for Money, AP, Vigor and Battle score controls, or enter a game variable number to edit it. Each value can be frozen or pinned. Show pinned HUD displays up to six pins while playing; `[F]` marks a frozen value. Disable cheats releases all freezes, while values already changed stay changed. Make a save state before experimenting. Pins and freezes persist in `cheats.json`.
+
 ## Optional Apple signing
 
 To export a directly installable development/ad-hoc build, use an Apple certificate and a matching provisioning profile that includes the target iPhone. Configure these repository **Actions secrets**:

@@ -5,6 +5,7 @@
 #include "shapes.hpp"
 #include "images.hpp"
 #include "picture_geometry.hpp"
+#include "../frontend/play_tools.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -64,6 +65,72 @@ void self_banks_and_snapshot() {
     wolf::Runtime different(project({cmd(180, {4})}));
     rejected = false; try { different.restore(saved); } catch (...) { rejected = true; }
     REQUIRE(rejected);
+}
+
+void common_route_writes_target_event_self() {
+    auto route = cmd(201, {30});
+    route["route"] = {{"flags", {3,3,3,0,3,6}}, {"commands", Json::array({
+        {{"code",28}, {"args",{1100001,42}}, {"extra",{0}}},
+        {{"code",47}, {"args",{2}}, {"extra",{0}}},
+        {{"code",55}, {"args",{1100001,1}}, {"extra",{0}}}})}};
+    auto p = project({route, cmd(121, {2000000, 1, 0, 0})});
+    p["maps"][0]["events"] = Json::array({{{"id",30}, {"x",1}, {"y",1}, {"pages",Json::array()}}});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(1100001, {-1,30,0,0}) == 42);
+    REQUIRE(rt.number(2000000) == 0);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); loaded.tick();
+    REQUIRE(loaded.error().empty()); REQUIRE(loaded.number(1100001, {-1,30,0,0}) == 43);
+    REQUIRE(loaded.number(2000000) == 1);
+}
+
+void manual_state_slots_preserve_choices_and_recover_errors() {
+    const auto base = std::filesystem::temp_directory_path() / ("wolf-manual-state-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(base / "saves");
+    const auto normal = base / "saves" / "savedata04.sav.json";
+    wolf::atomic_save(normal.u8string(), {{"normal", 42}});
+    auto p = project({cmd(150,{0,5,0,5,1,3,255,10,20,100,0},0,{"unused.png"}),
+        cmd(290,{128,3,5,5,1,5,50}), cmd(102, {18}, 0, {"First", "Second"}), cmd(401,{2}),
+        cmd(121,{2000001,1,0,0},1), cmd(401,{3}), cmd(121,{2000001,2,0,0},1), cmd(499)});
+    p["common"]["events"].push_back({{"id",1}, {"mode",0}, {"commands",Json::array({cmd(999)})}});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(!rt.choice().empty());
+    const auto original = rt.snapshot();
+    play_tools::SaveStates states(base); states.save(1, rt, {123.5f,234.25f});
+    REQUIRE(states.exists(1)); REQUIRE(!states.exists(2)); REQUIRE(!states.exists(3));
+    rt.start_common(1); rt.tick(); REQUIRE(!rt.error().empty());
+    bool rejected = false; try { states.save(1, rt, {}); } catch (...) { rejected = true; } REQUIRE(rejected);
+    const auto cursor = play_tools::SaveStates(base).load(1, rt);
+    REQUIRE(cursor.x == 123.5f); REQUIRE(cursor.y == 234.25f); REQUIRE(rt.error().empty()); REQUIRE(rt.snapshot() == original);
+    auto bad = wolf::load_json(states.path(1).u8string()); bad["runtime"]["project_id"] = "different";
+    wolf::atomic_save(states.path(2).u8string(), bad);
+    rejected = false; try { states.load(2, rt); } catch (...) { rejected = true; }
+    REQUIRE(rejected); REQUIRE(rt.snapshot() == original);
+    rt.tick(); wolf::Input choose; choose.confirm = true; rt.tick(choose); rt.tick();
+    REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000001) == 1);
+    REQUIRE(wolf::load_json(normal.u8string()) == Json({{"normal",42}}));
+    REQUIRE(wolf::load_json(states.path(1).u8string()).at("runtime") == original);
+    std::filesystem::remove_all(base);
+}
+
+void cheats_freeze_reads_and_writes_and_persist_separately() {
+    const auto base = std::filesystem::temp_directory_path() / ("wolf-cheats-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto p = project({cmd(121,{2000013,0,0,0}), cmd(111,{1,2000013,0,1}), cmd(401,{1}),
+        cmd(121,{2000010,123,0,0},1), cmd(499)});
+    wolf::Runtime rt(p); rt.set_number(2000013,60);
+    play_tools::Cheats cheats(base); REQUIRE(!cheats.enabled);
+    cheats.enabled = true; cheats.show_pins = true; cheats.freeze(rt,2000013,true);
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.number(2000013) == 60); REQUIRE(rt.number(2000010) == 123);
+    cheats.edit(rt,2000013,80); REQUIRE(rt.number(2000013) == 80);
+    cheats.entries[2000099].pinned = true; cheats.persist();
+    play_tools::Cheats reread(base); REQUIRE(reread.enabled); REQUIRE(reread.show_pins);
+    REQUIRE(reread.entries.at(2000099).pinned); REQUIRE(reread.entries.at(2000013).frozen);
+    const auto state = rt.snapshot(); rt.restore(state); rt.set_number(2000013,0); REQUIRE(rt.number(2000013) == 80);
+    rt.return_to_title(); REQUIRE(rt.number(2000013) == 80);
+    reread.enabled = false; reread.apply(rt); rt.set_number(2000013,12); REQUIRE(rt.number(2000013) == 12);
+    bool rejected = false; try { rt.set_number_freezes({{9000012,1}}); } catch (...) { rejected = true; }
+    REQUIRE(rejected); REQUIRE(rt.number(2000013) == 12);
+    REQUIRE(!state.contains("cheats")); REQUIRE(!std::filesystem::exists(base / "states"));
+    std::filesystem::remove_all(base);
 }
 void unsupported_is_fatal() {
     wolf::Runtime rt(project({cmd(765432), cmd(121, {2000000, 999, 0, 0})}));
@@ -518,6 +585,24 @@ void picture_effects_are_separate_from_query_values() {
     REQUIRE(wolf::picture_pattern(rt.pictures().at("3"), 3) == 4); REQUIRE(wolf::picture_pattern(rt.pictures().at("3"), 4) == 3);
     wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); loaded.tick(); loaded.tick();
     REQUIRE(loaded.pictures().at("3").at("draw_shift").at("x") == 12); REQUIRE(loaded.pictures().at("3").at("x") == 20);
+}
+void attack_pattern_ignores_inactive_operand_and_commits_final_frame() {
+    for (int extra : {0, 50}) for (bool reverse : {false, true}) {
+        const int first = reverse ? 5 : 1, last = reverse ? 1 : 5;
+        auto p = project({cmd(150, {0, 5000, 0, 5, 1, 3, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+            cmd(290, {128, 3, 5000, 5000, first, last, extra}), cmd(180, {99})});
+        auto clear = p["common"]["events"][0]; clear["id"] = 1; clear["commands"] = Json::array({cmd(290, {400, 0, 5000, 5000, 0, 0, 0})});
+        p["common"]["events"].push_back(clear);
+        wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+        REQUIRE(rt.pictures().at("5000").at("pattern") == 3);
+        REQUIRE(wolf::picture_pattern(rt.pictures().at("5000"), 1) == first);
+        REQUIRE(wolf::picture_pattern(rt.pictures().at("5000"), 15) == last);
+        wolf::Runtime loaded(p); loaded.restore(rt.snapshot());
+        for (int i = 0; i < 20; ++i) loaded.tick();
+        REQUIRE(loaded.error().empty()); REQUIRE(loaded.pictures().at("5000").at("pattern") == last);
+        REQUIRE(!loaded.pictures().at("5000").contains("pattern_effect"));
+        loaded.start_common(1); loaded.tick(); REQUIRE(loaded.pictures().at("5000").at("pattern") == last);
+    }
 }
 void ranged_move_includes_existing_ids_when_first_is_missing() {
     wolf::Runtime rt(project({cmd(150, {0, 2, 0, 1, 1, 1, 255, 20, 0, 125, 0}, 0, {"test.png"}),
@@ -1034,10 +1119,14 @@ void full_install_and_thin_update() {
 int main() {
     try {
         execution_and_waits(); branch_and_loop(); self_banks_and_snapshot(); unsupported_is_fatal(); atomic_overwrite(); named_database_and_bounds(); route_waits_and_persistence(); database_counts_and_absent_rows(); saved_variables_survive_restart(); literal_indirect_and_real_arithmetic(); common_event_string_arguments(); map_events_precede_parallel_common_events(); relative_common_calls(); string_conditions(); strings_and_resource_files(); picture_file_sources(); picture_flicker_and_input_replay(); delayed_picture_fade_and_sound(); choices_wait_and_restore(); picture_interpolation_survives_resume(); transfer_preserves_caller_and_changes_map(); picture_ranges_match_windows(); nested_condition_breaks_nearest_loop(); picture_hover_uses_original_dimensions(); message_reveal_waits_and_restores(); database_and_many_text_substitutions(); picture_delay_reset_splits_pending_range(); picture_move_preserves_graphic_and_same_values(); full_install_and_thin_update();
+        common_route_writes_target_event_self();
+        manual_state_slots_preserve_choices_and_recover_errors();
+        cheats_freeze_reads_and_writes_and_persist_separately();
         delayed_text_picture_reveal_survives_restore(); delayed_moves_use_current_position_and_can_be_cancelled();
         game_clock_is_writable_and_survives_restore();
         pending_pictures_accept_effects_and_queries_like_windows();
         picture_effects_are_separate_from_query_values(); ranged_move_includes_existing_ids_when_first_is_missing();
+        attack_pattern_ignores_inactive_operand_and_commits_final_frame();
         basic_and_mouse_input_permissions();
         automatic_basic_input_is_deferred_and_restored(); choice_mouse_selects_clicked_row_and_rejects_outside_click();
         opening_press_and_deferred_confirm_cannot_accept_choice(); mouse_query_distinguishes_new_held_and_released();
@@ -1074,6 +1163,6 @@ int main() {
         choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click(); entirely_empty_choice_skips_all_of_its_branches();
         sound_preload_and_release_do_not_start_playback_or_change_music_state(); se_stop_cancels_reserved_sounds_only_on_its_channel();
         sound_database_variable_resolves_original_track_metadata();
-        std::cout << "83 native runtime tests passed\n"; return 0;
+        std::cout << "87 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

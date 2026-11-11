@@ -11,7 +11,13 @@ int main(int argc, char** argv) {
         const auto storage = std::getenv("WOLF_STORAGE_DIR");
         const auto resource_storage = std::getenv("WOLF_RESOURCE_STORAGE_DIR");
         wolf::Runtime runtime(wolf::load_json(argv[1]), storage ? storage : "", std::filesystem::u8path(argv[1]).parent_path().u8string(), resource_storage ? resource_storage : "");
-        if (argc > 6) runtime.restore(wolf::load_json(argv[6]));
+        if (argc > 6) {
+            const auto saved = wolf::load_json(argv[6]);
+            if (saved.value("format", "") == "wolf-manual-state") {
+                if (saved.at("version") != 1) throw std::runtime_error("Unsupported manual state version");
+                runtime.restore(saved.at("runtime"));
+            } else runtime.restore(saved);
+        }
         if (argc > 3 && std::stoi(argv[3]) >= 0) runtime.start_common(std::stoi(argv[3]));
         const int frames = argc > 2 ? std::stoi(argv[2]) : 120;
         wolf::InputReplay replay(argc > 4 ? wolf::load_json(argv[4]) : wolf::Json::array());

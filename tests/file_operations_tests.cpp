@@ -2,6 +2,7 @@
 #include "window.hpp"
 #include "presentation.hpp"
 #include "picture_render.hpp"
+#include "picture_blend.hpp"
 #include "picture_geometry.hpp"
 #include "controls.hpp"
 #include "trackpad.hpp"
@@ -35,6 +36,31 @@ void check_picture_transforms(SDL_Renderer* renderer) {
         for (int c = 0; c < 3; ++c) if (output[sample + c] != colors[index][c])
             throw std::runtime_error("Mirrored/rotated picture pixels do not match the expected corner");
     }
+}
+
+void check_subtraction(SDL_Renderer* renderer) {
+    SDL_SetRenderDrawColor(renderer, 180, 100, 40, 255); SDL_RenderClear(renderer);
+    std::array<unsigned char, 8> pixels{{100, 80, 120, 255, 100, 80, 120, 0}};
+    std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)> texture(
+        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, 2, 1), SDL_DestroyTexture);
+    if (!texture || SDL_UpdateTexture(texture.get(), nullptr, pixels.data(), 8) != 0) throw std::runtime_error(SDL_GetError());
+    SDL_SetTextureAlphaMod(texture.get(), 128);
+    auto mode = subtractive_blend();
+    const bool fallback = SDL_SetTextureBlendMode(texture.get(), mode) != 0;
+    if (fallback) SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
+    auto paint = [&] { draw_picture_copy(renderer, texture.get(), nullptr, {4, 6, 20, 10}, 0); };
+    if (fallback) draw_subtractive(renderer, paint); else paint();
+    std::vector<unsigned char> output(64 * 56 * 4);
+    if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, output.data(), 64 * 4) != 0)
+        throw std::runtime_error(SDL_GetError());
+    const std::array<int, 3> expected{{130, 60, 0}};
+    for (int c = 0; c < 3; ++c) {
+        if (std::abs(output[(8 * 64 + 6) * 4 + c] - expected[c]) > 1)
+            throw std::runtime_error("Enemy fade must subtract source RGB times opacity, clamped at black");
+        if (output[(8 * 64 + 20) * 4 + c] != std::array<int, 3>{{180, 100, 40}}[c])
+            throw std::runtime_error("Transparent pixels must not subtract from the scene");
+    }
+    if (output[(8 * 64 + 6) * 4 + 3] != 255) throw std::runtime_error("Subtraction must preserve destination alpha");
 }
 
 int main() {
@@ -127,6 +153,7 @@ int main() {
         target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, 64, 56);
         if (!target || SDL_SetRenderTarget(renderer, target) != 0) throw std::runtime_error(SDL_GetError());
         check_picture_transforms(renderer);
+        check_subtraction(renderer);
         SDL_SetRenderDrawColor(renderer, 40, 110, 210, 255); SDL_RenderClear(renderer);
         SDL_Rect marker{4, 4, 12, 12};
         SDL_SetRenderDrawColor(renderer, 230, 30, 70, 255); SDL_RenderFillRect(renderer, &marker);

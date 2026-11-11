@@ -57,6 +57,7 @@ public:
     void start_common(int id);
     std::int32_t number(int ref, Context context = {});
     void set_number(int ref, std::int32_t value, Context context = {});
+    void set_number_freezes(const std::map<int, std::int32_t>& values);
     std::string text(int ref, Context context = {});
     void set_text(int ref, std::string value, Context context = {});
     std::string expand(std::string value, Context context);
@@ -84,6 +85,7 @@ public:
 private:
     Runtime(std::shared_ptr<const Json> project, std::string save_root, std::string asset_root, std::string resource_root, std::string identity);
     std::shared_ptr<const Json> project_;
+    std::map<int, std::int32_t> number_freezes_; // External app tools; never part of original game saves.
     Json databases_, pictures_ = Json::object(), audio_ = Json::array();
     Json transition_ = {{"id", -1}, {"frames", 0}, {"wait", false}};
     Json pending_picture_erases_ = Json::array();

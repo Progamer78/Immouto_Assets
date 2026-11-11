@@ -10,6 +10,7 @@ void Runtime::reset_to_title() {
     Runtime fresh(project_, save_root_, asset_root_, resource_root_, project_id_);
     fresh.frame_ = frame_ + 1;
     fresh.input_ = fresh.previous_input_ = input_; fresh.raw_input_ = raw_input_;
+    fresh.set_number_freezes(number_freezes_);
     for (int kind = 0; kind < 3; ++kind)
         fresh.audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1}, {"fade_ms", 0}});
     *this = std::move(fresh);
