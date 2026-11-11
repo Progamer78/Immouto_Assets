@@ -58,7 +58,8 @@
     "A": 130,
     "B": 148,
     "touch_strip": "A/B before Menu, above safe area",
-    "quick_tap_latch": true
+    "quick_tap_latch": true,
+    "cancel": "Basic cancel, mouse right-click and literal Esc (100), including keyboard-only A/B menus"
   },
   "device_tested": false,
   "local_frontend_timing": {
@@ -75,7 +76,49 @@
     "windows_app_suites": 3,
     "windows_core_release_suites": 1,
     "python": 14,
-    "ios_sdk": "Pending Actions",
+    "ios_sdk": "Build succeeded, downloaded ARM64/iOS15 IPA verified",
     "device_tested": false
+  },
+  "release": {
+    "source_ci": "https://github.com/Progamer78/Immouto_Assets/actions/runs/43029616431",
+    "source": "b71da652f0524e5e2723326dc391e2ab944e2166",
+    "all_four_ci_jobs_passed": true,
+    "release": "https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1",
+    "converter_bytes": 863232,
+    "converter_sha256": "0c5de5736f897aa4d1fa26527f55a33b28f27931a6e79d67ec578e4201cb39ba",
+    "package_bytes": 380437,
+    "package_sha256": "4c9c20522d1e693151c4f02ca63dc54f5c32477d45ef19b48a4994227ebfe5c6",
+    "windows_amd64_verified": true,
+    "ci_converter_local_pc_fixture_passed": true,
+    "package_license_notices_included": true
+  },
+  "ipa": {
+    "run": "https://github.com/Progamer78/Immouto_Assets/actions/runs/43029616440",
+    "head_sha": "b71da652f0524e5e2723326dc391e2ab944e2166",
+    "release": "https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1",
+    "bytes": 1095920,
+    "sha256": "79bf3e1bc419e7004886bc4fd3429a2029915a2ad89142a1461e3c4d1c8f8489",
+    "arm64_verified": true,
+    "zip_crc_verified": true,
+    "bundle_id": "com.local.monochromeport",
+    "minimum_ios": "15.0",
+    "game_assets_included": false,
+    "signed": false,
+    "device_tested": false,
+    "run_seconds": 46.0,
+    "steps_seconds": {
+      "Set up job": 1.0,
+      "Run actions/checkout@v4": 1.0,
+      "Record build tools": 1.0,
+      "Reuse compiled iOS dependencies": 2.0,
+      "Generate native ARM64 Xcode project": 7.0,
+      "Build unsigned device application": 20.0,
+      "Package unsigned IPA": 0.0,
+      "Publish IPA to a private release": 4.0,
+      "Upload small build metadata": 1.0,
+      "Post Reuse compiled iOS dependencies": 0.0,
+      "Post Run actions/checkout@v4": 0.0,
+      "Complete job": 1.0
+    }
   }
 }

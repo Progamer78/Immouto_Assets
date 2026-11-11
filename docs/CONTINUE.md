@@ -1,8 +1,40 @@
-# Continue this game's native iOS port
+# Continue the native iOS port
 
-Current source checkpoint: 766d223175e32146ac496c68b97a108e39f5a40c (2026-11-11). Full build 5 remains installed; build 13 was tested by the user. Keep this native and offline, with Actions builds.
+Production source: b71da652f0524e5e2723326dc391e2ab944e2166 (2026-11-11).
+Latest release: https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1
+IPA 1,095,920 bytes; SHA-256 79bf3e1bc419e7004886bc4fd3429a2029915a2ad89142a1461e3c4d1c8f8489.
+Build run 43029616440 passed in 46 seconds; all four source CI jobs passed (43029616431).
+Downloaded ZIP/digest/ARM64/iOS15/bundle/no-assets checks pass. Install over the existing full-build asset cache.
+PC-save-converter.zip is also attached (380,437 bytes); Actions-built Windows AMD64 exe was tested with the local original PC SaveData04.sav.
+Phone UI/input remains untested here. No whole-game completion claim.
 
-Latest: https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-14-1 . IPA 1,055,615 bytes; SHA-256 b3a91fe018b4ecea00e675b3e222d4624bf92d2aa2847037458a42e19e216f31. Build run 42992402314 succeeded in 40 seconds. All four source CI jobs passed (42992384316). Downloaded ARM64/iOS15/no-assets IPA verified. Install over the existing app and preserve Documents. New iPhone menus need a device check.
+Current work:
+- Empty legacy command104 is inert in supplied Game.exe. Exact Day8 map1/event24/page0 offset757237 no longer halts.
+- Unmodified slot2 (frame134442, 23:30) passes the original 1:00 stop into next morning.
+- User requested girl -> Do something -> Exit. The direct click from this earlier state first reaches a bedtime gate; user said choose Yes. Unmodified bedtime continuation passed. A separate test enters original map1/event4/page4 with the SAME progress/IR to isolate that requested submenu; it found common339 offset3831676 command290 [112,20,6100,6100,5,5,80].
+- Automatic X/Y zoom now pulses linearly out/back, rests, honors anchors, remains independent of base/query values, survives Show/restore and full-load clock shifts. Nineteen Windows rectangle samples establish the formula.
+- Isolated continuation reaches the scene's button294 (endbutton.png, center985,540), confirms Exit/Yes, reaches ending and next-morning dialogue at frame137832 without stop. Do NOT claim the entire raw touch path from the earlier bedtime gate was established.
+- Ignored helper build/continue_exit_test.py and build/device-day8-exit retain checkpoints, including selection-state, scene-after-zoom-fix-state and exit-finish-state. build/device-day8 has unmodified source slot2, bedtime and former104 continuations.
+- slot3 frame95836, Day7 noon: holiday Common310 explicitly erases fourth picture pair1206/1207 outside early morning, while fifth remains at y400. This is original layout, not a missing translated choice.
+- User confirmed Library/Status only appear later on PC. Leave original gates intact. Status V334 is set in the skill tutorial; Library is map1/event29, gated by Status picture110 and V64.
+
+New app tools:
+- Movable C button opens the custom SDL cheat panel; Menu also opens it; desktop F10.
+- Original names from SystemDB type14.schema.names, sparse live globals, aliases/IDs/values, recursive Refine on previous results, Any/baseline, changed/unchanged/increased/decreased, undo12, rename pins, freeze, edit/refill. Search state persists while playing.
+- v2 cheats.json migrates v1 pins/freezes and stores custom names. Independent of saves/state slots.
+- Touch strip has A (WOLF130), B(148), Menu last. Cancel now also emits Esc100 for keyboard-only menus. Quick taps latch two simulation ticks. Runtime/replays/snapshots support keyboard sets; old format6 states omit the optional field safely.
+- Developer WOLF_CAPTURE_TOOLS=1/all captures pinned/all-variable panels. Both render successfully; row clipping fixed.
+- PC converter: tools/pc_save_convert.cpp, optional WOLF_BUILD_PC_CONVERTER on Windows. Vendored MIT WolfSave pinned at537ceba4262368c61bfb9c4fa5333341a115c662, only desktop; never linked into iOS.
+- User drags normal SaveDataNN.sav onto .exe, copies .pc-save.json into Documents/imports, Menu -> Import PC save. Writes a vacant normal slot2..32, leaves current session/old slots/PC original alone, uses neutral preview.
+- Transfers global/map/common numbers and strings, mutable rows with schema check, restarts original postload V302=2/Sys25=1. Copies phone engine display defaults (font fallback20). Cached Windows formatting records become plain text to avoid glyph1 failures; original resource text regains formatting on reload. This is persistent progress, NOT a Windows VM snapshot.
+- Fresh import was selected via original title Load slot2 and rendered to1600 ticks without error in build/pc-import-test/menu-import-storage. Do not rely only on headless tests: two earlier local import attempts caught missing UI font/default and binary formatting in cached strings.
+- docs/PC_SAVES.md has user steps. Zip includes WolfSave and nlohmann licenses. Original source saves/logs/images/IR remain ignored.
+
+Checks: 93 runtime scenarios, SDL renderer/input/audio and14 Python tests pass. Source CI Windows/Linux/macOS core and macOS frontend pass. Local software-renderer timing 60FPS, 3.57ms game, 5.25ms CPU, one30.5ms slow frame in3seconds; do not promise zero stutter or device timings. Game JSON unchanged SHA12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c, fingerprint67778d5a6703906a, stateformat6.
+See reports/tools_progress_validation.json and reports/ios_build_check.json.
+Release utilities: ignored build/publish_tools_release.py, build/verify_tools_final_ios.py. Final docs-only commit should not retrigger builds.
+
+Next: user device feedback on new panel/A/B/PC import and late-night Exit; continue compatibility work from saved checkpoints rather than replaying the week. Prior full fight and performance context follows.
 
 Attack command 290 [128,3,5000,5000,1,5,50] now ignores its inactive final operand. Supplied Game.exe commits the final one-shot pattern; native now agrees. Full reported Stray Boar fight passes from the supplied normal slot with no stat edits. Follow-on fixes: subtractive blend for enemy disappearance (Metal reverse subtraction, software fallback), and character-route self variables use the addressed map event (common 241 resets event 30 meter). Second battle run includes guard/enemy/party actions and returns home. All fights/skills are not established as complete.
 

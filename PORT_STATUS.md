@@ -2,6 +2,8 @@
 
 ## Tools and Day 8 follow-up (2026-11-11)
 
+[Build 16](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1) is published: 1,095,920-byte unsigned thin IPA, 46-second Actions build, SHA-256 `79bf3e1bc419e7004886bc4fd3429a2029915a2ad89142a1461e3c4d1c8f8489`. Source `b71da65`; [all four source CI jobs pass](https://github.com/Progamer78/Immouto_Assets/actions/runs/43029616431). Downloaded ARM64/iOS15/ZIP/digest verified. The release includes a 380,437-byte PC converter ZIP with licenses; its Actions-built Windows executable was also checked against the supplied local PC save.
+
 Command 104 at offset 757237 now matches the supplied Windows executable's inert behavior. The unmodified supplied Day 8 state passes the former 1:00 stop into the next morning. A separate continuation test enters the sleeping-interaction page with the same progress, chooses the requested submenu and follows Exit/Yes through the ending to morning. It exposed automatic picture zoom, now implemented with the reference triangle pulse and rest interval, independent X/Y scales, original anchors and save/load rebasing. This continuation test isolates the menu handler; it is not proof of the entire touch route from the earlier 23:30 bedtime gate.
 
 The new cheat panel has a movable direct-access C button, name/ID/value search, repeated refinement and changed/unchanged/increased/decreased scans, undo, named pins and freezes. Literal A/B keys are on the touch strip, with quick taps retained across simulation ticks. Original Library/Status unlock conditions remain intact. The Day 7 holiday gap is explicitly created by the original event outside early morning; no option is invented or unlocked.
