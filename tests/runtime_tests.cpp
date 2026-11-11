@@ -333,6 +333,64 @@ void picture_hover_uses_original_dimensions() {
     input.mouse_x = 20; input.mouse_y = 36; rt.start_common(0); rt.tick(input); REQUIRE(rt.number(2000000) == 0);
     REQUIRE(rt.error().empty()); std::filesystem::remove_all(base);
 }
+void image_dimensions_cache_before_path_lookup_and_invalidate() {
+    const auto temp = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
+    const auto base = temp / ("wolf-size-cache-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    REQUIRE(base.parent_path() == temp); std::filesystem::create_directories(base / "Data");
+    const unsigned char png[] = {137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,8,0,0,0,6,8,6,0,0,0,254,5,223,251,0,0,0,20,73,68,65,84,120,156,99,248,255,255,63,3,62,140,87,114,176,40,0,0,196,7,143,113,180,214,159,217,0,0,0,0,73,69,78,68,174,66,96,130};
+    { std::ofstream file(base / "Data/picture.png", std::ios::binary); file.write(reinterpret_cast<const char*>(png), sizeof(png)); }
+    wolf::Resources resources(base.u8string());
+    REQUIRE(resources.image_size("Data/PICTURE.png") == std::make_pair(8, 6));
+    std::filesystem::remove(base / "Data/picture.png");
+    REQUIRE(resources.image_size("Data/PICTURE.png") == std::make_pair(8, 6));
+    resources.invalidate(); bool rejected = false;
+    try { (void)resources.image_size("Data/PICTURE.png"); } catch (...) { rejected = true; }
+    REQUIRE(rejected); std::filesystem::remove_all(base);
+}
+void clear_picture_effects_preserves_base_picture_and_move() {
+    auto p = project({cmd(150, {48, 10, 0, 40, 20, 1, 123, 50, 60, 100, 0}, 0, {"<SQUARE>"}),
+        cmd(290, {32, 0, 10, 10, 20, 5, 0}), cmd(290, {64, 0, 10, 10, 0, 0, 150}),
+        cmd(290, {48, 5, 10, 10, 8, 9, 10}), cmd(290, {80, 5, 10, 10, 20, 10, 5}),
+        cmd(290, {144, 3, 10, 10, 1, 4, 0}), cmd(180, {1}),
+        cmd(290, {400, 0, 10, 10, 0, 0, 0})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick();
+    REQUIRE(rt.pictures().at("10").contains("draw_shift")); REQUIRE(rt.pictures().at("10").contains("flicker"));
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.error().empty());
+    const auto& picture = loaded.pictures().at("10");
+    for (const char* field : {"draw_shift", "zoom_effect", "shake", "flicker", "pattern_effect"}) REQUIRE(!picture.contains(field));
+    REQUIRE(picture.at("x") == 50); REQUIRE(picture.at("y") == 60); REQUIRE(picture.at("opacity") == 123);
+    REQUIRE(picture.at("zoom") == 100); REQUIRE(picture.at("pattern") == 1);
+}
+void data_resource_caches_invalidate_and_save_resources_stay_live() {
+    const auto temp = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
+    const auto base = temp / ("wolf-data-cache-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    REQUIRE(base.parent_path() == temp); std::filesystem::create_directories(base / "Data"); std::filesystem::create_directories(base / "Save");
+    wolf::Resources resources(base.u8string(), base.u8string());
+    REQUIRE(!resources.exists("Data/modflag"));
+    { std::ofstream file(base / "Data/modflag"); file << "one"; }
+    REQUIRE(!resources.exists("Data/modflag")); resources.invalidate(); REQUIRE(resources.exists("Data/modflag"));
+    REQUIRE(resources.read_text("Data/modflag") == "one");
+    { std::ofstream file(base / "Data/modflag"); file << "two"; }
+    REQUIRE(resources.read_text("Data/modflag") == "one"); resources.invalidate(); REQUIRE(resources.read_text("Data/modflag") == "two");
+    REQUIRE(!resources.exists("Save/live.txt"));
+    { std::ofstream file(base / "Save/live.txt"); file << "first"; }
+    REQUIRE(resources.exists("Save/live.txt")); REQUIRE(resources.read_text("Data/../Save/live.txt") == "first");
+    { std::ofstream file(base / "Save/live.txt"); file << "second"; }
+    REQUIRE(resources.read_text("Save/live.txt") == "second"); REQUIRE(resources.read_text("Data/../Save/live.txt") == "second");
+    std::filesystem::remove_all(base);
+}
+void native_save_write_invalidates_file_existence_queries() {
+    const auto temp = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
+    const auto base = temp / ("wolf-save-exists-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    REQUIRE(base.parent_path() == temp); std::filesystem::create_directories(base);
+    auto p = project({cmd(122, {3000001, 1280, 0, 1}, 0, {"<<GET_FILE_EXIST>>Save/custom.sav.json"}),
+        cmd(222, {2000000, 3000000, 2000000, 0}), cmd(180, {1}),
+        cmd(122, {3000002, 1280, 0, 1}, 0, {"<<GET_FILE_EXIST>>Save/custom.sav.json"})});
+    wolf::Runtime rt(p, base.u8string(), base.u8string(), base.u8string());
+    rt.set_text(3000000, "Save/custom.sav"); rt.set_number(2000000, 7); rt.start_common(0); rt.tick();
+    REQUIRE(rt.text(3000001) == "0"); rt.tick(); REQUIRE(rt.text(3000002) == "1"); REQUIRE(rt.error().empty());
+    std::filesystem::remove_all(base);
+}
 void message_reveal_waits_and_restores() {
     const auto p = project({cmd(101, {}, 0, {"Hello \\s[0]"}), cmd(121, {2000000, 77, 0, 0})});
     wolf::Runtime rt(p); rt.set_number(9000008, 20); rt.set_number(9000009, 60); rt.set_number(9000010, 2);
@@ -955,6 +1013,10 @@ int main() {
         automatic_basic_input_is_deferred_and_restored(); choice_mouse_selects_clicked_row_and_rejects_outside_click();
         opening_press_and_deferred_confirm_cannot_accept_choice(); mouse_query_distinguishes_new_held_and_released();
         unrecognized_message_escapes_are_literal_text();
+        image_dimensions_cache_before_path_lookup_and_invalidate();
+        clear_picture_effects_preserves_base_picture_and_move();
+        data_resource_caches_invalidate_and_save_resources_stay_live();
+        native_save_write_invalidates_file_existence_queries();
         delayed_se_dispatch_survives_restore();
         music_stop_preserves_kind_and_fade_duration();
         zero_sound_frequency_matches_windows_default();
@@ -982,6 +1044,6 @@ int main() {
         choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click(); entirely_empty_choice_skips_all_of_its_branches();
         sound_preload_and_release_do_not_start_playback_or_change_music_state(); se_stop_cancels_reserved_sounds_only_on_its_channel();
         sound_database_variable_resolves_original_track_metadata();
-        std::cout << "77 native runtime tests passed\n"; return 0;
+        std::cout << "81 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

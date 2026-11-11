@@ -56,6 +56,11 @@ if(WOLF_BUILD_APP)
         target_link_libraries(wolf-file-tests PRIVATE wolf_core SDL2::SDL2-static)
         add_test(NAME native-screenshots COMMAND wolf-file-tests)
         set_tests_properties(native-screenshots PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+        add_executable(wolf-audio-tests tests/audio_tests.cpp)
+        target_include_directories(wolf-audio-tests PRIVATE frontend)
+        target_compile_definitions(wolf-audio-tests PRIVATE SDL_MAIN_HANDLED)
+        target_link_libraries(wolf-audio-tests PRIVATE wolf_audio wolf_core SDL2::SDL2-static)
+        add_test(NAME native-audio COMMAND wolf-audio-tests)
         # Compile the iOS-specific C++ paths on the desktop before waiting for Xcode.
         # The small Foundation bridge still requires the actual iOS SDK in Actions.
         add_library(wolf-ios-frontend-check OBJECT frontend/main.cpp)

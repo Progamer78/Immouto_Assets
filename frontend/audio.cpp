@@ -35,7 +35,10 @@ struct Audio::Impl {
         float volume = 1;
         bool retiring = false;
         explicit Voice(ma_engine* engine, const std::filesystem::path& path, int channel_id, int sound_kind) : file(path.u8string()), channel(channel_id), kind(sound_kind) {
-            const auto flags = MA_SOUND_FLAG_NO_SPATIALIZATION | (kind == 2 ? MA_SOUND_FLAG_DECODE : MA_SOUND_FLAG_STREAM);
+            // Initialize the decoder and its first page, then finish decoding
+            // effects on miniaudio's worker instead of blocking a game frame.
+            const auto flags = MA_SOUND_FLAG_NO_SPATIALIZATION | (kind == 2 ?
+                MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_WAIT_INIT : MA_SOUND_FLAG_STREAM);
 #ifdef _WIN32
             const auto result = ma_sound_init_from_file_w(engine, path.c_str(), flags, nullptr, nullptr, &sound);
 #else
@@ -43,11 +46,22 @@ struct Audio::Impl {
 #endif
             if (result != MA_SUCCESS) throw std::runtime_error("Cannot decode game audio: " + file + " (" + std::to_string(result) + ")");
         }
+        Voice(ma_engine* engine, const Voice& source, int channel_id) : file(source.file), channel(channel_id), kind(source.kind) {
+            if (ma_sound_init_copy(engine, &source.sound, MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, &sound) != MA_SUCCESS)
+                throw std::runtime_error("Cannot reuse decoded game audio: " + file);
+        }
         ~Voice() { ma_sound_uninit(&sound); }
     };
     wolf::Resources resources;
+    std::map<std::string, std::filesystem::path> paths;
+    const std::filesystem::path& path(const std::string& name) {
+        auto found = paths.find(name);
+        if (found == paths.end()) found = paths.emplace(name, resources.path("Data/" + name)).first;
+        return found->second;
+    }
     ma_engine engine{};
     SDL_AudioDeviceID device = 0;
+    bool paused = false;
     std::vector<std::unique_ptr<Voice>> voices;
     std::vector<std::unique_ptr<Voice>> preloaded;
     static void callback(void* data, Uint8* output, int bytes) {
@@ -71,7 +85,10 @@ struct Audio::Impl {
 
 Audio::Audio(const std::filesystem::path& root) : impl_(std::make_unique<Impl>(root)) {}
 Audio::~Audio() = default;
-void Audio::pause(bool paused) { SDL_PauseAudioDevice(impl_->device, paused ? 1 : 0); }
+void Audio::pause(bool paused) {
+    if (impl_->paused == paused) return;
+    SDL_PauseAudioDevice(impl_->device, paused ? 1 : 0); impl_->paused = paused;
+}
 void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes) {
     auto& voices = impl_->voices;
     voices.erase(std::remove_if(voices.begin(), voices.end(), [](const auto& voice) {
@@ -93,7 +110,7 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
             }), voices.end());
             continue;
         }
-        const auto path = impl_->resources.path("Data/" + event.at("file").get<std::string>());
+        const auto& path = impl_->path(event.at("file"));
         auto& preloaded = impl_->preloaded;
         if (event.at("operation") == "release_unused") {
             preloaded.erase(std::remove_if(preloaded.begin(), preloaded.end(), [&](const auto& voice) {
@@ -132,7 +149,18 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
         }), voices.end());
         std::unique_ptr<Impl::Voice> voice;
         const auto cached = std::find_if(preloaded.begin(), preloaded.end(), [&](const auto& value) { return value->kind == kind && value->file == path.u8string(); });
-        if (cached == preloaded.end()) voice = std::make_unique<Impl::Voice>(&impl_->engine, path, channel, kind);
+        if (kind == 2) {
+            // Keep a small decoded template cache. Playback copies share sample
+            // data while retaining independent channels, positions and volume.
+            if (cached == preloaded.end()) {
+                if (preloaded.size() == 16) preloaded.erase(preloaded.begin());
+                preloaded.push_back(std::make_unique<Impl::Voice>(&impl_->engine, path, channel, kind));
+                voice = std::make_unique<Impl::Voice>(&impl_->engine, *preloaded.back(), channel);
+            } else {
+                voice = std::make_unique<Impl::Voice>(&impl_->engine, **cached, channel);
+                std::rotate(cached, cached + 1, preloaded.end());
+            }
+        } else if (cached == preloaded.end()) voice = std::make_unique<Impl::Voice>(&impl_->engine, path, channel, kind);
         else { voice = std::move(*cached); preloaded.erase(cached); voice->channel = channel; }
         voice->volume = event.at("volume").get<float>() / 100.f;
         ma_sound_set_volume(&voice->sound, voice->volume * std::max(0, volumes.at(kind)) / 100.f);

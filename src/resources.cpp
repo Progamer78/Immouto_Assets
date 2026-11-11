@@ -10,6 +10,13 @@ std::string folded(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return std::tolower(c); });
     return value;
 }
+bool cacheable_data(std::string relative) {
+    std::replace(relative.begin(), relative.end(), '\\', '/');
+    while (relative.compare(0, 2, "./") == 0) relative.erase(0, 2);
+    if (folded(relative).compare(0, 5, "data/") != 0) return false;
+    for (const auto& part : std::filesystem::u8path(relative)) if (part == "..") return false;
+    return true;
+}
 }
 Resources::Resources(std::string root, std::string writable_root) : root_(std::filesystem::u8path(root)), writable_root_(std::filesystem::u8path(writable_root)) {}
 
@@ -53,7 +60,25 @@ std::filesystem::path Resources::path(std::string relative) {
     return result;
 }
 
+bool Resources::exists(const std::string& relative, bool cache_writable) {
+    // Save paths remain live by default. The interpreter also caches its script
+    // probes, invalidating after native writes and when returning to foreground.
+    const bool cache = cache_writable || cacheable_data(relative);
+    if (cache) {
+        const auto found = existence_.find(relative);
+        if (found != existence_.end()) return found->second;
+    }
+    const bool result = std::filesystem::exists(path(relative));
+    if (cache) existence_[relative] = result;
+    return result;
+}
+
 std::string Resources::read_text(const std::string& relative) {
+    const bool cache = cacheable_data(relative);
+    if (cache) {
+        const auto found = text_.find(relative);
+        if (found != text_.end()) return found->second;
+    }
     const auto file = path(relative);
     if (!std::filesystem::is_regular_file(file)) return "<NoFile>";
     if (std::filesystem::file_size(file) > 16 * 1024 * 1024) throw std::runtime_error("Game text resource is too large");
@@ -62,6 +87,11 @@ std::string Resources::read_text(const std::string& relative) {
     std::string result{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
     if (result.compare(0, 3, "\xef\xbb\xbf") == 0) result.erase(0, 3);
     if (result.find('\0') != std::string::npos) throw std::runtime_error("Binary data used as a text resource: " + relative);
+    constexpr std::size_t limit = 4 * 1024 * 1024;
+    if (cache && result.size() <= limit) {
+        if (text_bytes_ + result.size() > limit) { text_.clear(); text_bytes_ = 0; }
+        text_bytes_ += result.size(); text_[relative] = result;
+    }
     return result;
 }
 }

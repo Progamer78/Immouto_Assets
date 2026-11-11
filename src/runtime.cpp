@@ -168,6 +168,7 @@ std::string Runtime::expand(std::string value, Context c) {
     // rather than the number of independent variables in a long message.
     static const std::regex reference(R"(\\(v[0-9]?|s|cself|self|sys|syss|udb|cdb|sdb)\[(-?[0-9]+(?::-?[0-9]+)*)\])", std::regex::icase);
     for (int pass = 0; pass < 16; ++pass) {
+        if (value.find('\\') == std::string::npos) return value;
         bool changed = false;
         std::string output; std::size_t previous = 0;
         for (std::sregex_iterator it(value.begin(), value.end(), reference), end; it != end; ++it) {
@@ -687,13 +688,14 @@ void Runtime::advance_pictures() {
 }
 
 void Runtime::picture_effect(const Json& cmd, Context c) {
-    const int options = arg(cmd, 0), type = (options >> 4) & 15;
-    if ((options & ~255) || (options & 15) != 0 || cmd.at("args").size() != 7 ||
-        (type != 2 && type != 3 && type != 4 && type != 5 && type != 6 && type != 7 && type != 8 && type != 9 && type != 10))
+    const int options = arg(cmd, 0), type = (options >> 4) & 31;
+    if ((options & ~511) || (options & 15) != 0 || cmd.at("args").size() != 7 ||
+        (type != 2 && type != 3 && type != 4 && type != 5 && type != 6 && type != 7 && type != 8 && type != 9 && type != 10 && type != 25))
         fail("Unsupported picture-effect target or layout");
     const int duration = std::max(0, number(arg(cmd, 1), c));
     const int first = number(arg(cmd, 2), c), last = number(arg(cmd, 3), c);
     const Json color = Json::array({number(arg(cmd, 4), c), number(arg(cmd, 5), c), number(arg(cmd, 6), c)});
+    if (type == 25 && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Unsupported clear-picture-effects operands");
     if (type == 2 && color.at(2) != 0) fail("Unsupported picture-shift extra operand");
     if (type == 3 && color.at(2).get<int>() < 0) fail("Negative picture-shake repeat count is not implemented");
     if (type == 7 && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Nonzero automatic picture zoom is not implemented");
@@ -701,6 +703,12 @@ void Runtime::picture_effect(const Json& cmd, Context c) {
     for (auto& picture : pictures_) {
         const int id = picture.at("id");
         if (id < std::min(first, last) || id > std::max(first, last)) continue;
+        if (type == 25) {
+            // Effect state is independent of Show/Move properties and their
+            // interpolation. The battle cursor clears effects this way.
+            for (const char* field : {"draw_shift", "zoom_effect", "shake", "flicker", "pattern_effect", "automatic_zoom"}) picture.erase(field);
+            continue;
+        }
         if (type == 7) { picture.erase("automatic_zoom"); continue; }
         if (type == 4) {
             if (color.at(2).get<int>() < 0) fail("Negative group picture zoom is not implemented");

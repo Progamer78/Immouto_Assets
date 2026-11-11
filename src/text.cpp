@@ -20,8 +20,12 @@ struct Font {
     std::vector<unsigned char> bytes;
     stbtt_fontinfo info{};
     explicit Font(const std::filesystem::path& path) {
-        std::ifstream stream(path, std::ios::binary);
-        bytes.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+        std::ifstream stream(path, std::ios::binary | std::ios::ate);
+        const auto length = stream ? stream.tellg() : std::streampos(-1);
+        if (length <= 0 || length > 64 * 1024 * 1024) throw std::runtime_error("Cannot load game font: " + path.u8string());
+        bytes.resize(static_cast<std::size_t>(length)); stream.seekg(0);
+        if (!stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
+            throw std::runtime_error("Cannot read game font: " + path.u8string());
         if (bytes.empty() || !stbtt_InitFont(&info, bytes.data(), stbtt_GetFontOffsetForIndex(bytes.data(), 0)))
             throw std::runtime_error("Cannot load game font: " + path.u8string());
     }

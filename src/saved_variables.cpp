@@ -110,6 +110,7 @@ void Runtime::flush_saves() {
         const auto path = std::filesystem::u8path(save_root_) / std::filesystem::u8path(name + ".json");
         atomic_save(path.u8string(), save_slots_.at(name));
     }
+    if (!dirty_saves_.empty()) resources_->invalidate();
     dirty_saves_.clear();
 }
 }

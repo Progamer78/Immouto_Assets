@@ -21,7 +21,7 @@ void Runtime::string_operation(const Json& cmd, Context context) {
         if (right.compare(0, exists_prefix.size(), exists_prefix) == 0) {
             const auto name = right.substr(exists_prefix.size());
             if (name.find_first_of("*?") != std::string::npos) fail("Wildcard file-existence checks are not implemented");
-            result = !name.empty() && name.back() != '/' && name.back() != '\\' && std::filesystem::exists(resources_->path(name)) ? "1" : "0";
+            result = !name.empty() && name.back() != '/' && name.back() != '\\' && resources_->exists(name, true) ? "1" : "0";
         } else if (right.compare(0, 2, "<<") == 0) fail("Unsupported special string request: " + right.substr(0, right.find(">>") + 2));
         else result = resources_->read_text(right);
         break;

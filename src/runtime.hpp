@@ -63,6 +63,7 @@ public:
     Json snapshot() const;
     void restore(const Json& state);
     void return_to_title();
+    void refresh_resources() { resources_->invalidate(); }
     Json diagnostics() const;
 
     const Json& project() const { return *project_; }

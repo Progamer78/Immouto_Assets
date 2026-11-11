@@ -11,6 +11,7 @@
 #include "presentation.hpp"
 #include "controls.hpp"
 #include "trackpad.hpp"
+#include "performance.hpp"
 #include "picture_geometry.hpp"
 #include "picture_render.hpp"
 #include <SDL.h>
@@ -24,6 +25,7 @@
 #include <vector>
 #include <mutex>
 #include <limits>
+#include <cstdio>
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #include <stb/stb_image.h>
@@ -56,9 +58,15 @@ struct Lifecycle {
     ~Lifecycle() { SDL_DelEventWatch(watch, this); }
 };
 std::vector<unsigned char> read_bytes(const fs::path& path) {
-    std::ifstream stream(path, std::ios::binary);
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
     if (!stream) throw std::runtime_error("Missing resource: " + path.u8string());
-    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+    const auto length = stream.tellg();
+    if (length < 0 || length > 256 * 1024 * 1024) throw std::runtime_error("Invalid image resource size: " + path.u8string());
+    std::vector<unsigned char> bytes(static_cast<std::size_t>(length));
+    stream.seekg(0);
+    if (!bytes.empty() && !stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
+        throw std::runtime_error("Cannot read image resource: " + path.u8string());
+    return bytes;
 }
 struct Texture {
     SDL_Texture* value = nullptr;
@@ -66,6 +74,8 @@ struct Texture {
     int logical_width = 0, logical_height = 0, border = 0;
     std::string revision;
     std::vector<unsigned char> pixels;
+    std::uint64_t last_used = 0;
+    std::size_t bytes() const { return pixels.size() + static_cast<std::size_t>(width) * height * 4; }
     ~Texture() { if (value) SDL_DestroyTexture(value); }
 };
 struct Assets {
@@ -73,6 +83,8 @@ struct Assets {
     SDL_Renderer* renderer;
     std::map<std::string, std::unique_ptr<Texture>> textures;
     TextRasterizer text;
+    std::uint64_t generation = 1;
+    void trim() { trim_texture_cache(textures, 192u * 1024 * 1024, generation); }
     explicit Assets(fs::path path, SDL_Renderer* output, const Json& project, const fs::path& writable) : resources(path.u8string(), writable.u8string()), renderer(output),
         text(path, project.at("game"), project.at("databases").at("system").at("types").at(12).at("rows")) {}
     Texture& text_picture(const Json& picture, const std::string& cache_name = {}) {
@@ -90,7 +102,7 @@ struct Assets {
             if (!texture->value) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
-        return *slot;
+        slot->last_used = generation; return *slot;
     }
     Texture& image(const std::string& filename) {
         auto& slot = textures[filename];
@@ -109,7 +121,7 @@ struct Assets {
             if (!texture->value) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
-        return *slot;
+        slot->last_used = generation; return *slot;
     }
     Texture& square() {
         auto& slot = textures[":square"];
@@ -121,7 +133,7 @@ struct Assets {
             if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, white, 4) != 0) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
-        return *slot;
+        slot->last_used = generation; return *slot;
     }
     Texture& shape(const Json& picture) {
         const int width = picture.at("div_x"), height = picture.at("div_y");
@@ -136,7 +148,7 @@ struct Assets {
             if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, pixels.data(), width * 4) != 0) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
-        return *slot;
+        slot->last_used = generation; return *slot;
     }
     Texture& brightened(const Texture& base, int id, const std::array<double, 3>& color) {
         const auto revision = base.revision + Json(color).dump();
@@ -150,12 +162,12 @@ struct Assets {
             if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, pixels.data(), base.width * 4) != 0) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
         }
-        return *slot;
+        slot->last_used = generation; return *slot;
     }
 };
 
 void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures, std::uint64_t frame,
-    int first_id = std::numeric_limits<int>::min(), int end_id = std::numeric_limits<int>::max()) {
+    int first_id = std::numeric_limits<int>::min(), int end_id = std::numeric_limits<int>::max(), const Trackpad* pointer = nullptr) {
     std::vector<const Json*> ordered;
     for (const auto& item : pictures) ordered.push_back(&item);
     std::sort(ordered.begin(), ordered.end(), [](const Json* a, const Json* b) { return a->at("id").get<int>() < b->at("id").get<int>(); });
@@ -186,7 +198,11 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         const float zoom = p.at("zoom").get<float>() / 100.f;
         const float zoom_y = p.at("zoom_y").get<float>() / 100.f;
         const auto [shift_x, shift_y] = wolf::picture_draw_offset(p, frame);
-        const auto area = wolf::picture_area(p, width, height);
+        auto area = wolf::picture_area(p, width, height);
+        if (pointer && game_cursor_picture(p)) {
+            area.x += pointer->x - p.at("x").get<double>();
+            area.y += pointer->y - p.at("y").get<double>();
+        }
         SDL_FRect destination{static_cast<float>(area.x + shift_x), static_cast<float>(area.y + shift_y),
             static_cast<float>(area.w), static_cast<float>(area.h)};
         if (kind == 2) {
@@ -267,11 +283,12 @@ void draw_controls_toggle(SDL_Renderer* renderer, presentation::Rect rect) {
         circle(rect.x + rect.w / 2 + i * rect.w / 5, rect.y + rect.h / 2, r);
     }
 }
-int show_app_menu(SDL_Window* window, bool mouse_mode) {
+int show_app_menu(SDL_Window* window, bool mouse_mode, bool show_performance) {
     const SDL_MessageBoxButtonData buttons[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Keep playing"},
-        {0, 1, "Return to title"}, {0, 2, mouse_mode ? "Use direct touch" : "Enable mouse mode"}};
+        {0, 1, "Return to title"}, {0, 2, mouse_mode ? "Use direct touch" : "Enable mouse mode"},
+        {0, 3, show_performance ? "Hide FPS monitor" : "Show FPS monitor"}};
     const SDL_MessageBoxData box{SDL_MESSAGEBOX_INFORMATION, window, "Game menu",
-        "Mouse mode: drag to move the cursor, tap to click, hold then release to right-click.", 3, buttons, nullptr};
+        "Mouse mode: drag to move the cursor, tap to click, hold then release to right-click.", 4, buttons, nullptr};
     int selected = 0;
     if (SDL_ShowMessageBox(&box, &selected) != 0) return 0;
     if (selected == 1) {
@@ -283,7 +300,8 @@ int show_app_menu(SDL_Window* window, bool mouse_mode) {
     }
     return selected;
 }
-void capture_frame(SDL_Renderer* renderer, const char* filename, const wolf::Runtime& runtime) {
+void capture_frame(SDL_Renderer* renderer, const char* filename, const wolf::Runtime& runtime,
+    const FrameMetrics::Reading& timing, bool real_time) {
     int width = 0, height = 0;
     if (SDL_GetRendererOutputSize(renderer, &width, &height) != 0) throw std::runtime_error(SDL_GetError());
     std::unique_ptr<SDL_Surface, decltype(&SDL_FreeSurface)> surface(
@@ -291,7 +309,22 @@ void capture_frame(SDL_Renderer* renderer, const char* filename, const wolf::Run
     if (!surface || SDL_RenderReadPixels(renderer, nullptr, surface->format->format, surface->pixels, surface->pitch) != 0 ||
         SDL_SaveBMP(surface.get(), filename) != 0) throw std::runtime_error(SDL_GetError());
     auto evidence = runtime.diagnostics(); evidence["picture_records"] = runtime.pictures();
+    evidence["frontend_performance"] = {{"real_time", real_time}, {"fps", timing.fps}, {"frame_ms", timing.frame_ms},
+        {"cpu_ms", timing.work_ms}, {"game_ms", timing.game_ms}, {"peak_ms", timing.peak_ms}, {"slow_frames", timing.slow}};
     wolf::atomic_save(std::string(filename) + ".json", evidence);
+}
+void draw_performance(SDL_Renderer* renderer, Assets& assets, const std::string& content,
+    const presentation::Layout& display, float density) {
+    const Json label = {{"content", content}, {"text_style", {{"size", 15}, {"shadow", 0}, {"speed", 0}, {"antialias", 1}}}};
+    auto& texture = assets.text_picture(label, "$performance");
+    const float scale = display.game.w / 1024.f;
+    const SDL_FRect background{display.safe.x + 6 * density, display.safe.y + 6 * density,
+        texture.width * scale + 12 * density, texture.height * scale + 8 * density};
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); SDL_SetRenderDrawColor(renderer, 0, 0, 0, 205);
+    SDL_RenderFillRectF(renderer, &background);
+    const SDL_FRect destination{background.x + 6 * density, background.y + 4 * density, texture.width * scale, texture.height * scale};
+    SDL_SetTextureBlendMode(texture.value, SDL_BLENDMODE_BLEND); SDL_SetTextureColorMod(texture.value, 220, 255, 220); SDL_SetTextureAlphaMod(texture.value, 255);
+    SDL_RenderCopyF(renderer, texture.value, nullptr, &destination);
 }
 }
 
@@ -349,6 +382,8 @@ int main(int argc, char** argv) {
         const int fps = runtime.project().at("game").at("fps");
         const char* capture_env = SDL_getenv("WOLF_CAPTURE_BMP");
         const std::string capture_path = capture_env ? capture_env : "";
+        const char* realtime_env = SDL_getenv("WOLF_CAPTURE_REALTIME");
+        const bool real_time = capture_path.empty() || (realtime_env && std::string(realtime_env) == "1");
         const char* capture_at = SDL_getenv("WOLF_CAPTURE_FRAME");
         const int capture_target = capture_at ? SDL_atoi(capture_at) : 0;
         if (!capture_path.empty() && capture_target < 1) throw std::runtime_error("WOLF_CAPTURE_FRAME must be positive when capturing");
@@ -390,27 +425,44 @@ int main(int argc, char** argv) {
         Lifecycle lifecycle(&runtime, save_path);
         auto& paused = lifecycle.paused;
         bool running = true;
-        double last = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency(), accumulator = 0;
+        auto seconds = [] { return static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency(); };
+        double last = seconds(), accumulator = 0;
+        FramePacer pacer(fps);
+        FrameMetrics metrics;
+        double previous_frame = 0, previous_work = 0, previous_game = 0, monitor_update = 0;
+        std::string monitor_text = "Measuring frame timing...";
         wolf::Input input;
         CancelButton cancel_button;
         MouseClickLatch direct_click;
         Trackpad trackpad; trackpad.x = width / 2.f; trackpad.y = height / 2.f;
+        bool pad_touch_active = false;
+        SDL_FingerID pad_finger = 0;
         presentation::FloatingToggle controls_toggle;
-        bool controls_visible = false, mouse_mode = false;
+        bool controls_visible = false, mouse_mode = false, show_performance = false;
         const auto controls_settings = storage / "controls.json";
         if (fs::exists(controls_settings)) try {
             const auto settings = wolf::load_json(controls_settings.u8string());
             controls_visible = settings.value("visible", false);
             mouse_mode = settings.value("mouse_mode", false);
+            show_performance = settings.value("show_performance", false);
             controls_toggle.x = std::clamp(settings.value("x", 1.f), 0.f, 1.f);
             controls_toggle.y = std::clamp(settings.value("y", 0.f), 0.f, 1.f);
         } catch (...) { SDL_Log("Using default touch-control settings"); }
         auto save_controls = [&] {
-            try { wolf::atomic_save(controls_settings.u8string(), {{"visible", controls_visible}, {"x", controls_toggle.x}, {"y", controls_toggle.y}, {"mouse_mode", mouse_mode}}); }
+            try { wolf::atomic_save(controls_settings.u8string(), {{"visible", controls_visible}, {"x", controls_toggle.x}, {"y", controls_toggle.y}, {"mouse_mode", mouse_mode}, {"show_performance", show_performance}}); }
             catch (...) { SDL_Log("Could not save touch-control settings"); }
         };
         bool compatibility_notice = false;
         while (running && !runtime.quit_requested()) {
+            if (real_time && !paused) {
+                double remaining;
+                while ((remaining = pacer.remaining(seconds())) > 0)
+                    SDL_Delay(remaining >= .002 ? static_cast<Uint32>((remaining - .001) * 1000) : 0);
+            }
+            const double frame_start = seconds();
+            pacer.begin(frame_start);
+            if (previous_frame) metrics.add(frame_start - previous_frame, previous_work, previous_game);
+            previous_frame = frame_start;
             bool keyboard_menu = false;
             bool ui_mouse = controls_toggle.captured();
             const auto event_display = display_area(window, renderer, width, height, controls_visible);
@@ -428,10 +480,14 @@ int main(int argc, char** argv) {
                     if (runtime.error().empty()) wolf::atomic_save(save_path.u8string(), runtime.snapshot());
                     paused = true; accumulator = 0;
                     trackpad.reset();
+                    pad_touch_active = false;
                     direct_click.reset();
                 }
                 if (event.type == SDL_APP_DIDENTERFOREGROUND ||
-                    (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)) paused = false;
+                    (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)) {
+                    paused = false; runtime.refresh_resources();
+                    last = seconds(); accumulator = 0; pacer.reset(); metrics.reset(); previous_frame = 0;
+                }
                 if (event.type == SDL_MOUSEBUTTONDOWN) {
                     const auto [px, py] = pointer(event.button.x, event.button.y);
                     const bool overlay = event.button.button == SDL_BUTTON_LEFT && controls_toggle.press(event_display.safe, toggle_size, px, py);
@@ -443,9 +499,26 @@ int main(int argc, char** argv) {
                     input.mouse_left_new |= event.button.button == SDL_BUTTON_LEFT && !overlay && !pad_press;
                     input.mouse_right_new |= event.button.button == SDL_BUTTON_RIGHT;
                 }
-                if (event.type == SDL_MOUSEMOTION && trackpad.captured())
+                // SDL's synthesized mouse positions are integer window points
+                // (three physical pixels per point on the user's iPhone).
+                // Track a touch through its float coordinates, without also
+                // applying its duplicate synthesized mouse motion.
+                if (event.type == SDL_FINGERDOWN && mouse_mode && trackpad.captured() && !pad_touch_active) {
+                    pad_finger = event.tfinger.fingerId; pad_touch_active = true;
+                    trackpad.press(event.tfinger.x * event_window_w, event.tfinger.y * event_window_h, SDL_GetTicks());
+                }
+                if (event.type == SDL_FINGERMOTION && pad_touch_active && event.tfinger.fingerId == pad_finger)
+                    trackpad.move(event.tfinger.x * event_window_w, event.tfinger.y * event_window_h,
+                        width * density / event_display.game.w, width, height);
+                if (event.type == SDL_FINGERUP && pad_touch_active && event.tfinger.fingerId == pad_finger) {
+                    trackpad.move(event.tfinger.x * event_window_w, event.tfinger.y * event_window_h,
+                        width * density / event_display.game.w, width, height);
+                    trackpad.release(SDL_GetTicks()); pad_touch_active = false;
+                }
+                if (event.type == SDL_MOUSEMOTION && event.motion.which != SDL_TOUCH_MOUSEID && trackpad.captured())
                     trackpad.move(event.motion.x, event.motion.y, width * density / event_display.game.w, width, height);
-                if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && trackpad.captured())
+                if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && trackpad.captured() &&
+                    !(event.button.which == SDL_TOUCH_MOUSEID && pad_touch_active))
                     trackpad.release(SDL_GetTicks());
                 if (event.type == SDL_MOUSEMOTION && controls_toggle.captured()) {
                     const auto [px, py] = pointer(event.motion.x, event.motion.y);
@@ -494,21 +567,30 @@ int main(int argc, char** argv) {
                 input.mouse_x = input.mouse_y = -1;
             }
             if (open_menu) {
-                const int selected = show_app_menu(window, mouse_mode);
+                const int selected = show_app_menu(window, mouse_mode, show_performance);
                 if (selected == 1) {
                     std::lock_guard<std::mutex> lock(lifecycle.guard);
                     runtime.return_to_title(); compatibility_notice = false;
                 }
                 if (selected == 2) { mouse_mode = !mouse_mode; save_controls(); }
+                if (selected == 3) { show_performance = !show_performance; save_controls(); }
                 trackpad.reset();
+                pad_touch_active = false;
                 direct_click.reset();
-                input = {}; accumulator = 0;
+                input = {}; accumulator = 0; last = seconds(); pacer.reset(); metrics.reset(); previous_frame = 0; monitor_update = 0;
             }
-            const double now = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
-            if (!capture_path.empty()) accumulator = 1.0 / fps;
+            if (paused) {
+                audio.pause(true); accumulator = 0; last = seconds(); pacer.reset(); metrics.reset(); previous_frame = 0;
+                SDL_Delay(30); continue;
+            }
+            // Simulation time follows the frame boundary. Variable event-pump
+            // time must not turn steady frames into alternating zero/two ticks.
+            const double now = std::max(frame_start, last);
+            if (!real_time) accumulator = 1.0 / fps;
             else if (!paused) accumulator += std::min(now - last, 0.25);
             last = now;
             int steps = 0;
+            const double game_start = seconds();
             while (runtime.error().empty() && accumulator >= 1.0 / fps && steps++ < 8) {
                 { std::lock_guard<std::mutex> lock(lifecycle.guard);
                     runtime.tick(cancel_button.map(replay ? replay->input(runtime.frame()) : mouse_mode ? trackpad.map(input) :
@@ -520,12 +602,14 @@ int main(int argc, char** argv) {
                 input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
                 if (runtime.file_operations_pending()) break;
             }
+            previous_game = seconds() - game_start;
             if (steps >= 8 || !runtime.error().empty()) accumulator = 0;
             audio.pause(paused || !runtime.error().empty());
+            ++assets.generation;
             if (SDL_SetRenderTarget(renderer, game_target->value) != 0) throw std::runtime_error(SDL_GetError());
             SDL_RenderSetLogicalSize(renderer, width, screen_height);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
-            draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), std::numeric_limits<int>::min(), 100000);
+            draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), std::numeric_limits<int>::min(), 100000, mouse_mode ? &trackpad : nullptr);
             draw_message(renderer, assets, runtime.message_state(), height);
             draw_pictures(renderer, assets, runtime.choice_pictures(), runtime.frame());
             draw_pictures(renderer, assets, runtime.pictures(), runtime.frame(), 100000);
@@ -568,7 +652,10 @@ int main(int argc, char** argv) {
                 const SDL_FRect controls_destination{display.controls.x, display.controls.y, display.controls.w, display.controls.h};
                 if (SDL_RenderCopyF(renderer, game_target->value, &controls_source, &controls_destination) != 0) throw std::runtime_error(SDL_GetError());
             }
-            if (mouse_mode) {
+            const auto& pictures = runtime.pictures();
+            const bool game_pointer_visible = pictures.contains("10000") && game_cursor_picture(pictures.at("10000")) &&
+                pictures.at("10000").at("opacity").get<int>() > 0 && pictures.at("10000").at("zoom") != 0 && pictures.at("10000").at("zoom_y") != 0;
+            if (mouse_mode && !game_pointer_visible) {
                 const float cx = display.game.x + trackpad.x * display.game.w / width, cy = display.game.y + trackpad.y * display.game.h / height;
                 const float size = 14 * density;
                 const SDL_FPoint arrow[] = {{cx,cy}, {cx + size * .2f,cy + size}, {cx + size * .45f,cy + size * .6f}, {cx + size * .85f,cy + size * .6f}, {cx,cy}};
@@ -580,9 +667,21 @@ int main(int argc, char** argv) {
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawLinesF(renderer, arrow, 5);
             }
             draw_controls_toggle(renderer, controls_toggle.bounds(display.safe, toggle_size));
+            if (show_performance) {
+                if (now >= monitor_update) {
+                    const auto reading = metrics.read(fps);
+                    char text[220];
+                    std::snprintf(text, sizeof(text), "%.1f FPS  %.1f ms\nCPU %.1f ms  Game %.1f ms\nPeak %.1f ms  Slow %d", reading.fps, reading.frame_ms,
+                        reading.work_ms, reading.game_ms, reading.peak_ms, reading.slow);
+                    monitor_text = text; monitor_update = now + .25;
+                }
+                draw_performance(renderer, assets, monitor_text, display, density);
+            }
             const bool captured = !capture_path.empty() && (runtime.frame() >= static_cast<std::uint64_t>(capture_target) || !runtime.error().empty());
-            if (captured) capture_frame(renderer, capture_path.c_str(), runtime);
+            if (captured) capture_frame(renderer, capture_path.c_str(), runtime, metrics.read(fps), real_time);
+            previous_work = seconds() - frame_start;
             SDL_RenderPresent(renderer);
+            if (assets.generation % 60 == 0) assets.trim();
             if (!runtime.error().empty() && !compatibility_notice) {
                 wolf::atomic_save((storage / "last-error.json").u8string(), runtime.diagnostics());
                 SDL_Log("Compatibility stop: %s", runtime.diagnostics().dump().c_str());
@@ -592,7 +691,6 @@ int main(int argc, char** argv) {
                 if (!capture_path.empty()) { result = 1; break; }
             }
             if (captured) break;
-            SDL_Delay(paused ? 30 : 1);
         }
         if (runtime.error().empty()) {
             std::lock_guard<std::mutex> lock(lifecycle.guard);

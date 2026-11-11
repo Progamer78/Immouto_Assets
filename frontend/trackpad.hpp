@@ -21,10 +21,10 @@ public:
     void move(float px, float py, float game_per_point, int width, int height) {
         if (!captured_) return;
         dragged_ |= std::hypot(px - start_x_, py - start_y_) > 6;
-        if (dragged_) {
-            x = std::clamp(x + (px - last_x_) * game_per_point, 0.f, static_cast<float>(width - 1));
-            y = std::clamp(y + (py - last_y_) * game_per_point, 0.f, static_cast<float>(height - 1));
-        }
+        // The threshold distinguishes a click from a drag; it must not impose
+        // a dead zone on the visible cursor or discard slow, precise movement.
+        x = std::clamp(x + (px - last_x_) * game_per_point, 0.f, static_cast<float>(width - 1));
+        y = std::clamp(y + (py - last_y_) * game_per_point, 0.f, static_cast<float>(height - 1));
         last_x_ = px; last_y_ = py;
     }
     void release(std::uint32_t now) {

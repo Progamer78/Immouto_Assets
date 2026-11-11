@@ -5,6 +5,7 @@
 #include "picture_geometry.hpp"
 #include "controls.hpp"
 #include "trackpad.hpp"
+#include "performance.hpp"
 #include <stb/stb_image.h>
 #include <chrono>
 #include <fstream>
@@ -41,6 +42,31 @@ int main() {
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* target = nullptr;
     try {
+        FramePacer pacer(60);
+        pacer.begin(1);
+        if (std::abs(pacer.remaining(1.01) - (1.0 / 60 - .01)) > 1e-9) throw std::runtime_error("Frame deadline must include work already done");
+        pacer.begin(1.1);
+        if (std::abs(pacer.remaining(1.1) - 1.0 / 60) > 1e-9) throw std::runtime_error("Late frames must not cause a burst of extra rendered frames");
+        pacer.reset(); if (pacer.remaining(100) != 0) throw std::runtime_error("Resume must not wait for an old frame deadline");
+        FrameMetrics metrics;
+        for (int i = 0; i < 120; ++i) metrics.add(1.0 / 60, .004, .002);
+        auto reading = metrics.read(60);
+        if (std::abs(reading.fps - 60) > .001 || std::abs(reading.work_ms - 4) > .001 || reading.slow)
+            throw std::runtime_error("FPS monitor must report elapsed time, excluding idle time from CPU work");
+        metrics.add(.1, .08, .07); reading = metrics.read(60);
+        if (reading.slow != 1 || reading.peak_ms != 100 || reading.fps >= 60) throw std::runtime_error("FPS monitor must expose a stalled frame");
+        for (int i = 0; i < 120; ++i) metrics.add(1.0 / 60, .004, .002);
+        if (metrics.read(60).slow) throw std::runtime_error("FPS monitor must age out old stalls");
+        metrics.reset(); if (metrics.read(60).fps != 0) throw std::runtime_error("Paused menu time must not contaminate the FPS monitor");
+        struct CacheEntry { std::size_t size; std::uint64_t last_used; std::size_t bytes() const { return size; } };
+        std::map<int, std::unique_ptr<CacheEntry>> cache;
+        cache[1] = std::make_unique<CacheEntry>(CacheEntry{100, 1});
+        cache[2] = std::make_unique<CacheEntry>(CacheEntry{200, 2});
+        cache[3] = std::make_unique<CacheEntry>(CacheEntry{300, 3});
+        trim_texture_cache(cache, 400, 3);
+        if (cache.size() != 1 || !cache.count(3)) throw std::runtime_error("Texture budget must evict old textures first");
+        trim_texture_cache(cache, 100, 3);
+        if (!cache.count(3)) throw std::runtime_error("Visible textures must remain resident when their working set exceeds the budget");
         const auto hidden = presentation::layout(2796, 1290, 1024, 576, {132,0,132,63}, false);
         const auto shown = presentation::layout(2796, 1290, 1024, 576, {132,0,132,63}, true);
         if (hidden.game.h <= shown.game.h || hidden.game.y + hidden.game.h > 1227.01f || hidden.controls.h != 0 ||
@@ -59,6 +85,9 @@ int main() {
         if (!quick_first.mouse_left_new || !quick_first.mouse_left || quick_held.mouse_left_new || !quick_held.mouse_left || quick_tap.map({}).mouse_left)
             throw std::runtime_error("A direct tap released between ticks must reach held-state game menus exactly once");
         Trackpad pad;
+        pad.press(1, 1, 10); const auto start_cursor = pad.x; pad.move(1.25f, 1, 1, 1024, 576);
+        if (pad.x != start_cursor + .25f) throw std::runtime_error("Slow trackpad motion must move the cursor without a drag dead zone");
+        pad.reset(); pad.x = 512; pad.y = 288;
         pad.press(50, 50, 100); pad.move(100, 70, 2, 1024, 576); pad.release(300);
         if (pad.x != 612 || pad.y != 328 || pad.map({}).mouse_left) throw std::runtime_error("Trackpad drag must move the cursor without clicking");
         pad.press(20, 20, 400); pad.release(450);
@@ -69,6 +98,14 @@ int main() {
         if (!pad.map({}).mouse_right_new || !pad.map({}).mouse_right || pad.map({}).mouse_left) throw std::runtime_error("Trackpad long press must right-click");
         pad.reset(); pad.press(10, 10, 1000); pad.move(-5000, 9000, 2, 1024, 576); pad.release(2000);
         if (pad.x != 0 || pad.y != 575 || pad.map({}).mouse_left || pad.map({}).mouse_right) throw std::runtime_error("Trackpad cursor must stay inside the game and not click after dragging");
+        pad.reset(); pad.x = 512; pad.y = 288; pad.press(10.25f, 20.25f, 1000);
+        pad.move(17.25f, 20.25f, 1, 1024, 576);
+        const float before_subpoint_motion = pad.x;
+        pad.move(17.5f, 20.25f, 1, 1024, 576);
+        if (std::abs(pad.x - before_subpoint_motion - .25f) > .001f) throw std::runtime_error("Trackpad must retain fractional touch motion after drag begins");
+        const wolf::Json hover_cursor{{"id",10000},{"kind",1},{"content","CharaChip/hand1.png"}};
+        auto scene_overlay = hover_cursor; scene_overlay["content"] = "cg/blackscreen.jpg";
+        if (!game_cursor_picture(hover_cursor) || game_cursor_picture(scene_overlay)) throw std::runtime_error("Cursor replacement must preserve unrelated scene pictures sharing the same ID");
         const auto safe = presentation::fit(2796, 1290, 1024, 656, {132, 0, 132, 63});
         if (safe.x < 132 || safe.x + safe.w > 2664 || safe.y < 0 || safe.y + safe.h > 1227.01f)
             throw std::runtime_error("iPhone presentation overlaps a notch or home gesture area");

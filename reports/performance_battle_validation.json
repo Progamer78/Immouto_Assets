@@ -1,0 +1,323 @@
+{
+  "date": "2026-11-11",
+  "scope": "Sustained game-loop performance, trackpad latency, frame pacing, memory, optional FPS monitor and battle picture-effect compatibility",
+  "device_feedback": {
+    "model": "iPhone 15 Pro Max",
+    "installed_build_before_update": {
+      "observed_fps": "about 6-7; one transient 60 reading",
+      "metal_hud_screenshot": {
+        "fps": 5.79,
+        "presentation_interval_ms": 172.64,
+        "gpu_ms": 0.92,
+        "memory_mb": 621.44
+      }
+    },
+    "new_update_device_tested": false
+  },
+  "changes": [
+    "Cache image dimensions before filesystem/path validation; inspect image headers without reading the entire file",
+    "Cache Data text and file-existence queries; invalidate on native writes, file operations and foreground",
+    "Skip variable-reference regex for literal strings",
+    "Use bulk image/font file reads",
+    "Avoid redundant audio-device pause locks; initialize SE decoding asynchronously and share cached decoded samples",
+    "Use floating touch positions and move the visible game hover cursor at presentation time; remove the cursor movement dead zone and duplicate fallback cursor",
+    "Use anchored 60 Hz render deadlines without a fixed extra sleep after vsync; exclude menus/background time from simulation catch-up",
+    "Evict old textures over a 192 MiB estimated CPU+GPU cache budget while retaining the current visible working set",
+    "Add persisted Menu option for FPS, frame interval, CPU/game work, rolling peak and slow frames"
+  ],
+  "benchmarks": {
+    "environment": "Windows desktop Release, actual native interpreter and frontend, SDL software renderer; not iPhone FPS",
+    "ticks_per_scene": 120,
+    "before": {
+      "bedroom-communication-verified/resume.json": {
+        "first_draw_ms": 84.8419,
+        "pictures": 63,
+        "software_draw": {
+          "max_ms": 3.0698,
+          "mean_ms": 2.095541666666666,
+          "p50_ms": 1.9941,
+          "p95_ms": 2.7588
+        },
+        "tick": {
+          "max_ms": 24.9576,
+          "mean_ms": 17.94151916666666,
+          "p50_ms": 17.5014,
+          "p95_ms": 20.9009
+        }
+      },
+      "cached_image_dimension_lookup_with_writable_overlay": {
+        "max_ms": 2.05,
+        "mean_ms": 0.6893491000000002,
+        "p50_ms": 0.6054,
+        "p95_ms": 1.1534
+      },
+      "interaction-state.json": {
+        "first_draw_ms": 93.5807,
+        "pictures": 71,
+        "software_draw": {
+          "max_ms": 3.3505,
+          "mean_ms": 1.7946516666666674,
+          "p50_ms": 1.6944,
+          "p95_ms": 2.4543
+        },
+        "tick": {
+          "max_ms": 80.5998,
+          "mean_ms": 21.748072499999996,
+          "p50_ms": 20.8591,
+          "p95_ms": 25.6307
+        }
+      },
+      "text_texture_rebuild_during_reveal": {
+        "max_ms": 6.7161,
+        "mean_ms": 0.20764923076923075,
+        "p50_ms": 0.1085,
+        "p95_ms": 0.1929
+      },
+      "unchanged_text_texture_cache_hit": {
+        "max_ms": 0.0063,
+        "mean_ms": 0.0005950000000000021,
+        "p50_ms": 0.0006,
+        "p95_ms": 0.0007
+      },
+      "verified-loaded-home-state.json": {
+        "first_draw_ms": 26.7155,
+        "pictures": 60,
+        "software_draw": {
+          "max_ms": 1.6209,
+          "mean_ms": 0.9896091666666667,
+          "p50_ms": 0.9014,
+          "p95_ms": 1.4957
+        },
+        "tick": {
+          "max_ms": 58.1981,
+          "mean_ms": 21.916255,
+          "p50_ms": 20.7942,
+          "p95_ms": 26.1678
+        }
+      }
+    },
+    "after": {
+      "bedroom-communication-verified/resume.json": {
+        "first_draw_ms": 80.4985,
+        "pictures": 63,
+        "software_draw": {
+          "max_ms": 2.4992,
+          "mean_ms": 1.753082499999999,
+          "p50_ms": 1.734,
+          "p95_ms": 1.9673
+        },
+        "tick": {
+          "max_ms": 16.0694,
+          "mean_ms": 2.5672591666666666,
+          "p50_ms": 2.4163,
+          "p95_ms": 2.8393
+        }
+      },
+      "cached_image_dimension_lookup_with_writable_overlay": {
+        "max_ms": 0.0002,
+        "mean_ms": 4.490000000000025e-05,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0001
+      },
+      "day2-home-native-check/resume.json": {
+        "first_draw_ms": 43.2297,
+        "pictures": 59,
+        "software_draw": {
+          "max_ms": 0.966,
+          "mean_ms": 0.7404241666666666,
+          "p50_ms": 0.721,
+          "p95_ms": 0.8962
+        },
+        "tick": {
+          "max_ms": 20.4286,
+          "mean_ms": 2.558923333333333,
+          "p50_ms": 2.3452,
+          "p95_ms": 2.861
+        }
+      },
+      "day3-overnight-native-check/resume.json": {
+        "first_draw_ms": 15.6396,
+        "pictures": 59,
+        "software_draw": {
+          "max_ms": 0.996,
+          "mean_ms": 0.5713316666666668,
+          "p50_ms": 0.5473,
+          "p95_ms": 0.724
+        },
+        "tick": {
+          "max_ms": 16.1078,
+          "mean_ms": 2.2572683333333345,
+          "p50_ms": 2.0478,
+          "p95_ms": 2.9
+        }
+      },
+      "interaction-state.json": {
+        "first_draw_ms": 81.0966,
+        "pictures": 71,
+        "software_draw": {
+          "max_ms": 2.1746,
+          "mean_ms": 1.5378766666666668,
+          "p50_ms": 1.506,
+          "p95_ms": 1.7985
+        },
+        "tick": {
+          "max_ms": 16.7886,
+          "mean_ms": 2.6892125000000004,
+          "p50_ms": 2.5287,
+          "p95_ms": 3.0008
+        }
+      },
+      "morning-native-check/resume.json": {
+        "first_draw_ms": 28.168,
+        "pictures": 59,
+        "software_draw": {
+          "max_ms": 0.9808,
+          "mean_ms": 0.5919008333333334,
+          "p50_ms": 0.5663,
+          "p95_ms": 0.7766
+        },
+        "tick": {
+          "max_ms": 16.5238,
+          "mean_ms": 2.3677358333333345,
+          "p50_ms": 2.1804,
+          "p95_ms": 2.9004
+        }
+      },
+      "text_texture_rebuild_during_reveal": {
+        "max_ms": 2.4684,
+        "mean_ms": 0.12770769230769233,
+        "p50_ms": 0.0748,
+        "p95_ms": 0.2151
+      },
+      "unchanged_text_texture_cache_hit": {
+        "max_ms": 0.0009,
+        "mean_ms": 0.0004890000000000005,
+        "p50_ms": 0.0005,
+        "p95_ms": 0.0006
+      },
+      "verified-loaded-home-state.json": {
+        "first_draw_ms": 22.0011,
+        "pictures": 60,
+        "software_draw": {
+          "max_ms": 1.7061,
+          "mean_ms": 0.7514191666666665,
+          "p50_ms": 0.7067,
+          "p95_ms": 1.0081
+        },
+        "tick": {
+          "max_ms": 20.2102,
+          "mean_ms": 2.620469166666666,
+          "p50_ms": 2.3843,
+          "p95_ms": 3.1962
+        }
+      }
+    },
+    "additional_dialogue": {
+      "cached_image_dimension_lookup_with_writable_overlay": {
+        "max_ms": 0.0002,
+        "mean_ms": 3.5999999999999994e-05,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0001
+      },
+      "extended-opening-state.json": {
+        "first_draw_ms": 46.9013,
+        "pictures": 30,
+        "software_draw": {
+          "max_ms": 8.8382,
+          "mean_ms": 5.812995,
+          "p50_ms": 5.6205,
+          "p95_ms": 6.79
+        },
+        "tick": {
+          "max_ms": 15.9349,
+          "mean_ms": 2.8369333333333326,
+          "p50_ms": 2.609,
+          "p95_ms": 3.5337
+        }
+      },
+      "text_texture_rebuild_during_reveal": {
+        "max_ms": 2.7965,
+        "mean_ms": 0.11714769230769231,
+        "p50_ms": 0.078,
+        "p95_ms": 0.1132
+      },
+      "unchanged_text_texture_cache_hit": {
+        "max_ms": 0.0006,
+        "mean_ms": 0.00045750000000000033,
+        "p50_ms": 0.0005,
+        "p95_ms": 0.0005
+      }
+    },
+    "game_loop_speedups": {
+      "bedroom-communication-verified/resume.json": 6.99,
+      "interaction-state.json": 8.09,
+      "verified-loaded-home-state.json": 8.36
+    },
+    "timed_frontend_with_monitor": {
+      "cpu_ms": 4.955221848961498,
+      "fps": 59.42662891257167,
+      "frame_ms": 16.82747310925541,
+      "game_ms": 3.5416411779852224,
+      "peak_ms": 27.97860000282526,
+      "real_time": true,
+      "slow_frames": 1
+    },
+    "unchanged_gameplay_snapshots": {
+      "home": {
+        "identical_snapshot": true,
+        "end_frame": 12830,
+        "ticks": 180
+      },
+      "interaction": {
+        "identical_snapshot": true,
+        "end_frame": 13430,
+        "ticks": 180
+      },
+      "communication": {
+        "identical_snapshot": true,
+        "end_frame": 13730,
+        "ticks": 180
+      }
+    }
+  },
+  "battle_effect": {
+    "command": 290,
+    "packed_effect": 400,
+    "effect": 25,
+    "operation": "Clear all independent picture effects, retaining base Show/Move properties and interpolation",
+    "original_common": 546,
+    "original_offset": 6665561,
+    "original_record": [
+      400,
+      0,
+      10000,
+      10000,
+      0,
+      0,
+      0
+    ],
+    "original_game_records_using_effect": 13,
+    "windows_isolated_reference": "clear removes prior color/shift effects without removing the base picture",
+    "native_original_common_fixture": "pass",
+    "saved_state_roundtrip": "pass",
+    "user_day4_save_replayed": false
+  },
+  "checks": {
+    "runtime_scenarios": 81,
+    "configuration": "Release",
+    "sdl_input_pixel_file_layout_checks": "pass",
+    "frame_deadline_metrics_texture_eviction_checks": "pass",
+    "generated_audio_pcm_callback_preload_share_stop_release_pause_resume": "pass",
+    "python_tests": 14,
+    "four_original_bedroom_menu_checks": "pass, each 300 rendered ticks; conditions/indices and time/AP unchanged",
+    "real_time_monitor_capture": "pass",
+    "git_diff_check": "pass"
+  },
+  "game_ir_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c",
+  "limits": [
+    "Desktop measurements do not establish new iPhone frame rate or end-to-end touch latency",
+    "Initial image/texture/font creation still takes 16-81 ms in these desktop scene fixtures; first-use loading pauses can remain",
+    "Complete Day 4 battle and whole-game compatibility are not yet verified",
+    "FPS monitor reports application frame timing and CPU wall time, not GPU execution time"
+  ]
+}
