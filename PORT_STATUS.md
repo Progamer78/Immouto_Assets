@@ -2,6 +2,16 @@
 
 **In progress. The full IPA runs on the user's iPhone, with gameplay and interface defects still being fixed. The complete game is unfinished.**
 
+## Build 14: reported battle, save states and cheat tools
+
+[Build 14](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-14-1), source `766d223`, is verified: 1,055,615 bytes, SHA-256 `b3a91fe018b4ecea00e675b3e222d4624bf92d2aa2847037458a42e19e216f31`. Actions run 42992402314 took 40 seconds. All four native CI jobs passed for the same source (42992384316). Both local Release configurations pass 87 runtime cases; renderer, audio and 14 Python tests also pass.
+
+The supplied attack failure retained an inactive operand of 50 in command 290. The supplied Windows executable ignores it and commits the final pattern after a one-shot animation. These semantics now match. Actual native play from the user's slot, without stat or story edits, reaches the Day 4 Stray Boar fight, defeats the enemy and returns home. A second run exercises guard, enemy action and another party attack. This also revealed and fixed subtractive enemy rendering and a parallel-common route resetting the target map event's attack meter. Later fights, bosses and every skill remain unverified.
+
+Menu now offers three manual save-state slots in `Documents/states/slot1.json` through `slot3.json`, accessible through Files sharing. They restore interpreter stacks, choices, picture effects, RNG and background music position. They do not overwrite normal saves or auto-load on launch. Normal files and cheat settings are independent. Optional Cheats offers Money/AP/Vigor/Battle score, variable-number editing, freezes, pins and a pinned HUD. It is off by default; disabling releases freezes without undoing existing edits. New iPhone menu interactions still need a device check.
+
+Windows timed frontend checks stay at 60 FPS with no slow frames: game work 3.15 ms with tools off and 3.24 ms with four freezes plus pinned HUD. These are local software-renderer measurements, not fresh iPhone timings. See [validation details](reports/battle_states_cheats_validation.json). The earlier performance work remains included.
+
 ## Performance and exact battle-log follow-up
 
 The user reported approximately 6-7 FPS on an iPhone 15 Pro Max. The old home loop repeatedly resolved paths, checked mod/save files and read fixed title text. Caching before filesystem access reduces the locally measured home/interaction game-loop work from 18-22 ms to 2.6-2.7 ms (about 7-8 times faster). A local timed frontend run with the monitor enabled averaged 59.4 FPS. The user's build 12 screenshot shows 60 FPS, 5.3 ms CPU work and 4.2 ms game work; it was captured during a compatibility stop, so this is not a sustained whole-game device benchmark.
