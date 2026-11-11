@@ -4,7 +4,7 @@ Work in progress: this is the native runtime project for the game specified in [
 
 The supplied game files remain in their original directory. Git excludes the original game, generated game data, private asset archives, build outputs and signing material.
 
-For the IPA download and Windows signing steps, see [Install on iPhone](docs/IPHONE_INSTALL.md). The latest [build 16 update](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1) fixes command 104 and automatic picture zoom, adds the searchable cheat panel, literal A/B keys and PC-save conversion/import. The 1,095,920-byte IPA built in 46 seconds; all four source CI jobs pass. Install it over the existing app to preserve assets and saves. New iPhone controls and broader compatibility still need device feedback.
+For the IPA download and Windows signing steps, see [Install on iPhone](docs/IPHONE_INSTALL.md). The latest [build 17 update](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-17-1) fixes the reported automatic mouse-input command. Its 1,096,934-byte IPA built in 41 seconds; all four source CI jobs pass. Install it over the existing app to preserve assets and saves. The separately reported missing scene buttons remain undiagnosed. Device testing and broader compatibility remain outstanding. The unchanged PC converter is available in [build 16](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1).
 
 ## Windows development
 

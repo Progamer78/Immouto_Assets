@@ -1,5 +1,13 @@
 # Native port status — 2026-11-11
 
+## Build 17: shared automatic mouse input
+
+[Build 17](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-17-1), source `1a8ff9a`, implements automatic mouse-button command125 mode0x20000000. The reported `[536870914]` is a simulated right click, which the former basic-input-only handler rejected. Neutral Windows reference measurements establish next-frame timing, combined masks, consecutive held state and simulated clicks bypassing player-device prohibition. Manual-state restore and ordinary game-load reset are covered; newly opened choices cannot consume their opening/reserved click.
+
+98 runtime scenarios, SDL renderer/input/audio suites and 14 Python tests pass. All four [source CI jobs](https://github.com/Progamer78/Immouto_Assets/actions/runs/43037323668) pass. A neutral full-frontend pixel check renders 12 controls in direct and trackpad modes after delayed show and erase/show operations. No shared visibility defect was established by these checks. **The reported missing scene buttons remain undiagnosed.** The supplied scene/save was not replayed; do not claim the input change restores those controls.
+
+The 1,096,934-byte unsigned thin IPA built in 41 seconds. Downloaded ZIP CRC, SHA-256 `c6ca12b6424566ae08ebb5617329cb63614c75e1286c79bc026126e81b8bd9b4`, ARM64, iOS15 and bundle identity are verified. Existing game assets and saves are reused. No new device timing or whole-game result is claimed. [Validation](reports/automatic_mouse_validation.json).
+
 ## Tools and Day 8 follow-up (2026-11-11)
 
 [Build 16](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1) is published: 1,095,920-byte unsigned thin IPA, 46-second Actions build, SHA-256 `79bf3e1bc419e7004886bc4fd3429a2029915a2ad89142a1461e3c4d1c8f8489`. Source `b71da65`; [all four source CI jobs pass](https://github.com/Progamer78/Immouto_Assets/actions/runs/43029616431). Downloaded ARM64/iOS15/ZIP/digest verified. The release includes a 380,437-byte PC converter ZIP with licenses; its Actions-built Windows executable was also checked against the supplied local PC save.

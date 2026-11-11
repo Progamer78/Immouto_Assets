@@ -2,12 +2,12 @@
 
 Current follow-up: shared command125 automatic mouse-button support passes neutral Windows reference checks, 98 runtime scenarios, all three local SDL/core suites and 14 Python tests. Mouse bits1/2/4 in mode0x20000000 queue for the next tick, combine, remain held across repeated ticks, bypass player-device prohibition and never synthesize basic Confirm/Cancel. New-choice arming and old/manual/full-load state compatibility are covered. Neutral full-frontend pixel checks render 12 controls in direct and trackpad modes. See reports/automatic_mouse_validation.json. The reported missing scene controls remain undiagnosed; do not claim this input fix restores them. No supplied scene was replayed in this follow-up. Original IR and assets remain unchanged.
 
-Production source: b71da652f0524e5e2723326dc391e2ab944e2166 (2026-11-11).
-Latest release: https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1
-IPA 1,095,920 bytes; SHA-256 79bf3e1bc419e7004886bc4fd3429a2029915a2ad89142a1461e3c4d1c8f8489.
-Build run 43029616440 passed in 46 seconds; all four source CI jobs passed (43029616431).
+Production source: 1a8ff9a38c3f41d84772c085216a6f766a4001a0 (2026-11-11).
+Latest release: https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-17-1
+IPA 1,096,934 bytes; SHA-256 c6ca12b6424566ae08ebb5617329cb63614c75e1286c79bc026126e81b8bd9b4.
+Build run43037344509 passed in41 seconds; all four source CI jobs passed (43037323668).
 Downloaded ZIP/digest/ARM64/iOS15/bundle/no-assets checks pass. Install over the existing full-build asset cache.
-PC-save-converter.zip is also attached (380,437 bytes); Actions-built Windows AMD64 exe was tested with the local original PC SaveData04.sav.
+The unchanged PC-save-converter.zip remains attached to build16.
 Phone UI/input remains untested here. No whole-game completion claim.
 
 Current work:

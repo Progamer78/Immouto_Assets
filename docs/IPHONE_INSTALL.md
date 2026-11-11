@@ -4,11 +4,11 @@ This is an early native test build. Opening, home, save/load, Training and Readi
 
 ## Update the installed game
 
-Download **Monochrome-unsigned.ipa** from **[iOS build 16 - tools and late-night fixes](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1)**. It is **1,095,920 bytes (about 1 MB)** and reuses full build 5 assets. Actions built it in 46 seconds; the downloaded IPA passed ZIP CRC, SHA-256, ARM64, iOS 15 and bundle checks, and all four source CI jobs pass. Command 104 and automatic zoom are fixed; a separate continuation test verifies the scene's Exit/Yes ending through to the next morning. It adds the searchable C-button cheat panel, literal A/B controls, and a PC converter/import menu. New phone UI/input and broader PC-save compatibility need device feedback; whole-game compatibility remains unfinished.
+Download **Monochrome-unsigned.ipa** from **[iOS build 17 - shared mouse input](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-17-1)**. It is **1,096,934 bytes (about 1 MB)** and reuses full build 5 assets. Actions built it in 41 seconds; downloaded ZIP CRC, SHA-256, ARM64, iOS15 and bundle checks pass, as do all four source CI jobs. This update fixes the reported automatic mouse-click command. The separate missing-button report remains undiagnosed; this build is not proof that those buttons are restored. Existing cheat tools, A/B keys, save states and PC import remain available. Device testing and whole-game compatibility remain outstanding.
 
 Install it with Sideloadly **over the existing Monochrome app**, using the same Apple ID and bundle identifier as before. **Do not uninstall the current app**: its Documents directory contains the game assets and saved slots. After updating, use the original title's Continue/Load option to select your save. Controls start hidden so the game picture can use more space. Tap the floating three-dot button to show/hide the bottom controls; drag that button to move it. Its position and visibility are saved. The bottom Menu button offers Return to title and **Enable mouse mode**. In mouse mode, drag like a trackpad to move the visible cursor, lift and tap to click, or hold without moving for at least half a second and release to right-click. Use **Menu -> Use direct touch** to switch back. The mode is saved separately from game slots. Choose **Menu -> Show FPS monitor** to see FPS, frame time, CPU/game-loop time, the recent peak frame time and slow frames. Choose Hide FPS monitor to turn it off. This setting persists. The target is the original game's 60 FPS; the monitor does not measure GPU time. The × button now sends the game's Cancel/right-click input, including to custom menus.
 
-This small IPA requires the existing asset cache. For a first installation or a device without that cache, install the full build below before applying build 16. Keep using the same signing/install settings to preserve the app data.
+This small IPA requires the existing asset cache. For a first installation or a device without that cache, install the full build below before applying build 17. Keep using the same signing/install settings to preserve the app data.
 
 ## Separate save states and cheats
 
@@ -18,7 +18,7 @@ To send a state for troubleshooting, open **Files -> On My iPhone -> Monochrome 
 
 Tap the movable **C** button for the cheat panel. Search by name, ID or value. Choose **New search** once, then play and use **Refine results** to narrow those matches; Changed/Unchanged/Increased/Decreased compare against the last scan. Use **Any / baseline** first when the value is unknown. Select a variable to Set value, Freeze, Pin or Rename it. The panel preserves results when closed. Toggle Cheats OFF to release freezes. Pins and freezes remain in `cheats.json`, separate from saves.
 
-The control strip includes **A** and **B**, sending the original game's literal keys. For PC saves, download the Windows converter from the latest release and follow [PC save conversion/import](PC_SAVES.md). Copy its output into the app's `imports` folder, then use **Menu -> Import PC save**.
+The control strip includes **A** and **B**, sending the original game's literal keys. For PC saves, download the Windows converter from [build 16](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-16-1) and follow [PC save conversion/import](PC_SAVES.md). Copy its output into the app's `imports` folder, then use **Menu -> Import PC save**.
 
 ## First installation: full game IPA
 
