@@ -4,11 +4,11 @@ This is an early native test build. Opening, home, save/load, Training and Readi
 
 ## Update the installed game
 
-Download **`Monochrome-unsigned.ipa`** from **[iOS build 7 - iPhone feedback fixes](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-7-1)**. This update is **1,002,775 bytes (about 1 MB)** and reuses the assets installed by full build 5. Its Actions build passed in 43 seconds; the downloaded archive passed ZIP, SHA-256 and ARM64 checks. The updated version still needs testing on the phone.
+Download **`Monochrome-unsigned.ipa`** from **[iOS build 8 - picture transforms and morning progression](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-8-1)**. This update is **1,003,717 bytes (about 1 MB)** and reuses the assets installed by full build 5. Its Actions build passed in 45 seconds; the downloaded archive passed ZIP, SHA-256 and ARM64 checks. The updated version still needs testing on the phone.
 
 Install it with Sideloadly **over the existing Monochrome app**, using the same Apple ID and bundle identifier as before. **Do not uninstall the current app**: its Documents directory contains the game assets and saved slots. After updating, use the original title's Continue/Load option to select your save. The new bottom Menu button offers Return to title; controls now fit within the iPhone safe area.
 
-This small IPA requires the existing asset cache. For a first installation or a device without that cache, install the full build below before applying build 7. Same-app data retention depends on the signing/install path and still needs confirmation with this update.
+This small IPA requires the existing asset cache. For a first installation or a device without that cache, install the full build below before applying build 8. The user confirmed that the prior thin update worked. Keep using the same signing/install settings to preserve the app data; build 8 still needs phone verification.
 
 ## First installation: full game IPA
 
