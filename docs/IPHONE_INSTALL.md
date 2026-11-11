@@ -16,7 +16,9 @@ Show the controls with the floating three-dot button, then choose **Menu -> Save
 
 To send a state for troubleshooting, open **Files -> On My iPhone -> Monochrome -> states**, long-press **slot1.json**, **slot2.json** or **slot3.json**, and choose **Share**. The folder appears after your first state save. You can attach that JSON together with `last-error.json` when reporting a problem.
 
-**Menu -> Cheats** starts off. Enable it for Money, AP, Vigor and Battle score; choose Set value, Add 100, Refill to maximum, Freeze or Pin. Find variable by number opens other numeric game variables. Show pinned HUD displays up to six pinned values; `[F]` means frozen. Disable cheats releases every freeze. Existing edits remain until you change them or load earlier progress. Save a separate state before experimenting. Settings and pins are stored in `cheats.json`, separate from normal saves and state slots.
+Tap the movable **C** button for the cheat panel. Search by name, ID or value. Choose **New search** once, then play and use **Refine results** to narrow those matches; Changed/Unchanged/Increased/Decreased compare against the last scan. Use **Any / baseline** first when the value is unknown. Select a variable to Set value, Freeze, Pin or Rename it. The panel preserves results when closed. Toggle Cheats OFF to release freezes. Pins and freezes remain in `cheats.json`, separate from saves.
+
+The control strip includes **A** and **B**, sending the original game's literal keys. For PC saves, download the Windows converter from the latest release and follow [PC save conversion/import](PC_SAVES.md). Copy its output into the app's `imports` folder, then use **Menu -> Import PC save**.
 
 ## First installation: full game IPA
 

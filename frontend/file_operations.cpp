@@ -12,6 +12,14 @@ void append_image(void* context, void* bytes, int count) {
 }
 }
 
+void write_import_preview(wolf::Resources& writable,int width,int height) {
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(width)*height*3,40);
+    std::string encoded;
+    if (!stbi_write_jpg_to_func(append_image,&encoded,width,height,3,pixels.data(),75)) throw std::runtime_error("Cannot encode imported save preview");
+    wolf::atomic_write(writable.path("Save/pc-import-preview.jpg").u8string(),encoded);
+    writable.invalidate();
+}
+
 void process_file_operations(SDL_Renderer* renderer, wolf::Resources& writable,
     const wolf::Json& operations, int width, int height) {
     std::vector<unsigned char> pixels;

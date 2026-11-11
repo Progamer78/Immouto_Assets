@@ -19,6 +19,10 @@ InputReplay::InputReplay(const Json& rows) {
             else if (key == "mouse_x") state.mouse_x = value;
             else if (key == "mouse_y") state.mouse_y = value;
             else if (key == "wheel") state.wheel = value;
+            else if (key == "keyboard") {
+                state.keyboard = value.get<std::set<int>>();
+                for (int code : state.keyboard) if (code < 100 || code > 399) throw std::runtime_error("Invalid replay keyboard code");
+            }
             else if (key != "frame") throw std::runtime_error("Unknown replay input: " + key);
         }
         changes_.emplace_back(static_cast<std::uint64_t>(frame), state);

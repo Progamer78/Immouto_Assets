@@ -136,6 +136,13 @@ int main() {
         pad.move(17.5f, 20.25f, 1, 1024, 576);
         if (std::abs(pad.x - before_subpoint_motion - .25f) > .001f) throw std::runtime_error("Trackpad must retain fractional touch motion after drag begins");
         const wolf::Json hover_cursor{{"id",10000},{"kind",1},{"content","CharaChip/hand1.png"}};
+        KeyboardLatch keyboard;
+        keyboard.press(130); keyboard.press(148);
+        if (keyboard.map({}).keyboard != std::set<int>({130,148})) throw std::runtime_error("Quick A/B taps must reach the next simulation tick");
+        keyboard.tick();
+        if (keyboard.map({}).keyboard.size()!=2) throw std::runtime_error("A/B taps must retain a held tick");
+        keyboard.tick();
+        if (!keyboard.map({}).keyboard.empty()) throw std::runtime_error("A/B taps must release");
         auto scene_overlay = hover_cursor; scene_overlay["content"] = "cg/blackscreen.jpg";
         if (!game_cursor_picture(hover_cursor) || game_cursor_picture(scene_overlay)) throw std::runtime_error("Cursor replacement must preserve unrelated scene pictures sharing the same ID");
         const auto safe = presentation::fit(2796, 1290, 1024, 656, {132, 0, 132, 63});
@@ -143,7 +150,7 @@ int main() {
             throw std::runtime_error("iPhone presentation overlaps a notch or home gesture area");
         const int menu_x = presentation::coordinate(safe.x + safe.w * 15 / 16, safe.x, safe.w, 1024);
         const int menu_y = presentation::coordinate(safe.y + safe.h * 616 / 656, safe.y, safe.h, 656);
-        if (!presentation::button(menu_x, menu_y, 7, 1024, 576) || presentation::button(menu_x, 700, 7, 1024, 576))
+        if (!presentation::button(menu_x, menu_y, presentation::menu_button, 1024, 576) || presentation::button(menu_x, 700, presentation::menu_button, 1024, 576))
             throw std::runtime_error("Safe-area touch mapping does not reach Menu correctly");
         if (SDL_Init(SDL_INIT_VIDEO) != 0) throw std::runtime_error(SDL_GetError());
         window = SDL_CreateWindow("Screenshot test", 0, 0, 64, 56, SDL_WINDOW_HIDDEN);

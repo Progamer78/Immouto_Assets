@@ -42,11 +42,21 @@ jobs:
       - name: Check binary parser
         run: python -m unittest discover -s tests -v
       - name: Configure native core
-        run: cmake -S . -B build -DWOLF_BUILD_APP=OFF -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DWOLF_BUILD_APP=OFF -DCMAKE_BUILD_TYPE=Release -DWOLF_BUILD_PC_CONVERTER=${{ runner.os == 'Windows' && 'ON' || 'OFF' }}
       - name: Compile
         run: cmake --build build --config Release --parallel 4
       - name: Test interpreter and persistent state
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Upload Windows PC save converter
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc-save-converter
+          path: |
+            build/Release/wolf-pc-convert.exe
+            docs/PC_SAVES.md
+            third_party/wolfsave/LICENSE
+          retention-days: 14
   frontend:
     runs-on: macos-15
     steps:

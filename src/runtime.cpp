@@ -163,6 +163,15 @@ void Runtime::set_number_freezes(const std::map<int, std::int32_t>& values) {
     for (const auto& [ref, value] : values) numbers_[static_cast<unsigned>(ref)] = value;
 }
 
+std::vector<int> Runtime::numeric_variable_refs() const {
+    std::vector<int> refs;
+    for (const auto& [ref, value] : numbers_) {
+        (void)value;
+        if (ref >= 2000000 && ref < 3000000) refs.push_back(static_cast<int>(ref));
+    }
+    return refs;
+}
+
 std::string Runtime::text(int ref, Context c) {
     if (ref >= 1000000000) {
         auto& value = cell(ref);
@@ -608,6 +617,7 @@ void Runtime::apply_picture_change(const Json& action) {
         if (previous.contains("flicker")) target["flicker"] = previous.at("flicker");
         if (previous.contains("draw_shift")) target["draw_shift"] = previous.at("draw_shift");
         if (previous.contains("zoom_effect")) target["zoom_effect"] = previous.at("zoom_effect");
+        if (previous.contains("automatic_zoom")) target["automatic_zoom"] = previous.at("automatic_zoom");
         if (previous.contains("shake")) target["shake"] = previous.at("shake");
         if (previous.contains("pattern_effect")) target["pattern_effect"] = previous.at("pattern_effect");
         if (previous.contains("color_correction")) target["color_correction"] = previous.at("color_correction");
@@ -729,7 +739,7 @@ void Runtime::picture_effect(const Json& cmd, Context c) {
     if (type == 25 && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Unsupported clear-picture-effects operands");
     if (type == 2 && color.at(2) != 0) fail("Unsupported picture-shift extra operand");
     if (type == 3 && color.at(2).get<int>() < 0) fail("Negative picture-shake repeat count is not implemented");
-    if (type == 7 && (duration != 0 || color != Json::array({0, 0, 0}))) fail("Nonzero automatic picture zoom is not implemented");
+    if (type == 7 && color.at(2).get<int>()<0) fail("Negative automatic picture zoom pause is not implemented");
     // The third parameter is an inactive editor field for pattern effects.
     // This game's attack records retain 50 there; Game.exe ignores it.
     if (type >= 8 && type <= 10 && duration && (color.at(0).get<int>() < 1 || color.at(1).get<int>() < 1))
@@ -761,7 +771,11 @@ void Runtime::picture_effect(const Json& cmd, Context c) {
             else picture["color_correction"] = {{"start", frame_ + 1}, {"duration", duration}, {"from", from}, {"to", color}};
             continue;
         }
-        if (type == 7) { picture.erase("automatic_zoom"); continue; }
+        if (type == 7) {
+            if (!duration || (color.at(0)==0 && color.at(1)==0)) picture.erase("automatic_zoom");
+            else picture["automatic_zoom"]={{"start",frame_+1},{"duration",duration},{"x",color.at(0)},{"y",color.at(1)},{"pause",color.at(2)}};
+            continue;
+        }
         if (type == 4) {
             if (color.at(2).get<int>() < 0) fail("Negative group picture zoom is not implemented");
             const auto previous = picture_group_zoom(picture, frame_);
@@ -937,6 +951,17 @@ std::array<double, 3> picture_group_zoom(const Json& picture, std::uint64_t fram
     return {effect.at("x"), effect.at("y"), (from + (effect.at("percent").get<double>() - from) * fraction) / 100};
 }
 
+std::array<double, 2> picture_automatic_zoom(const Json& picture, std::uint64_t frame) {
+    if (!picture.contains("automatic_zoom")) return {1,1};
+    const auto& effect=picture.at("automatic_zoom");
+    const auto start=effect.at("start").get<std::uint64_t>(),duration=effect.at("duration").get<std::uint64_t>();
+    if (!duration || frame<start) return {1,1};
+    const auto phase=(frame-start+1)%(duration*2+effect.at("pause").get<std::uint64_t>());
+    // Supplied Windows engine: linear expansion/return, followed by a rest.
+    const double amount=phase<duration ? static_cast<double>(phase)/duration : phase<duration*2 ? 2-static_cast<double>(phase)/duration : 0;
+    return {1+effect.at("x").get<double>()*amount/100,1+effect.at("y").get<double>()*amount/100};
+}
+
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame) {
     std::array<double, 3> result{picture.value("red", 100.0), picture.value("green", 100.0), picture.value("blue", 100.0)};
     if (picture.contains("color_correction")) {
@@ -1008,6 +1033,12 @@ void Runtime::execute(Run& run, const Json& cmd) {
     switch (code) {
     case 0: case 99: case 103: case 212: case 499: return;
     case 101: show_message(run, cmd); return;
+    case 104:
+        // This operand-free legacy command is inert in the supplied 3.191
+        // executable: it preserves pictures/effects and an active message.
+        // In particular, the source comment "Effects off" is not its behavior.
+        if (!cmd.at("args").empty() || !cmd.at("strings").empty()) fail("Unsupported legacy command 104 layout");
+        return;
     case 106:
         if (!cmd.at("args").empty() || cmd.at("strings").size() != 1) fail("Unsupported debug-text layout");
         if (debug_text_.size() == 64) debug_text_.erase(debug_text_.begin());
@@ -1223,6 +1254,14 @@ void Runtime::execute(Run& run, const Json& cmd) {
             if ((options & 16) && input_.confirm) pressed = 10;
             if ((options & 32) && input_.cancel) pressed = 11;
             if ((options & 64) && input_.sub) pressed = 12;
+        } else if (kind == 1 || kind == 2) {
+            // WOLF keyboard codes are its own layout: A=130, B=148.
+            // Bit 0 restricts the query to the key in the third operand.
+            const int specific = (options & 1) ? number(arg(cmd, 2), context) : -1;
+            for (int code : input_.keyboard) {
+                if ((kind == 1 && code >= 300) || (kind == 2 && code < 300)) continue;
+                if (specific < 0 || specific == code) { pressed = code; break; }
+            }
         } else if (kind == 3) {
             if ((options & 16) && ((options & 4096) ? input_.mouse_left : input_.mouse_left_new)) pressed = 20;
             if ((options & 32) && ((options & 4096) ? input_.mouse_right : input_.mouse_right_new)) pressed = 21;
@@ -1489,7 +1528,7 @@ Json Runtime::snapshot() const {
         {"previous_input", {{"up", previous_input_.up}, {"down", previous_input_.down}, {"left", previous_input_.left}, {"right", previous_input_.right},
             {"confirm", previous_input_.confirm}, {"cancel", previous_input_.cancel}, {"sub", previous_input_.sub},
             {"mouse_left", previous_input_.mouse_left}, {"mouse_right", previous_input_.mouse_right}, {"mouse_middle", previous_input_.mouse_middle},
-            {"mouse_x", previous_input_.mouse_x}, {"mouse_y", previous_input_.mouse_y}}}};
+            {"mouse_x", previous_input_.mouse_x}, {"mouse_y", previous_input_.mouse_y}, {"keyboard", previous_input_.keyboard}}}};
 }
 
 void Runtime::restore(const Json& state) {
@@ -1535,6 +1574,8 @@ void Runtime::restore(const Json& state) {
     candidate.previous_input_.left = previous_input.at("left"); candidate.previous_input_.right = previous_input.at("right"); candidate.previous_input_.sub = previous_input.at("sub");
     candidate.previous_input_.mouse_left = previous_input.at("mouse_left"); candidate.previous_input_.mouse_right = previous_input.at("mouse_right"); candidate.previous_input_.mouse_middle = previous_input.at("mouse_middle");
     candidate.previous_input_.mouse_x = previous_input.at("mouse_x"); candidate.previous_input_.mouse_y = previous_input.at("mouse_y");
+    candidate.previous_input_.keyboard = previous_input.value("keyboard", std::set<int>{});
+    for (int key : candidate.previous_input_.keyboard) if (key < 100 || key > 399) fail("Invalid saved keyboard key");
     candidate.pending_picture_erases_ = state.at("pending_picture_erases");
     if (!candidate.pending_picture_erases_.is_array()) fail("Invalid delayed-picture state");
     for (const auto& erase : candidate.pending_picture_erases_) {

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GAME = ROOT / "Living_With_SIster_Monochrome_Fantasy_Kagura_Decypted" / "Living With SIster Monochrome Fantasy"
 COMMAND_NAMES = {
     0: "Blank", 99: "Checkpoint", 101: "Message", 102: "Choices", 103: "Comment",
-    104: "Unknown104", 105: "ForceMessageClose", 106: "DebugText", 107: "ClearDebugText",
+    104: "Legacy104", 105: "ForceMessageClose", 106: "DebugText", 107: "ClearDebugText",
     111: "NumberCondition", 112: "StringCondition", 121: "SetVariable", 122: "SetString",
     123: "InputKey", 124: "SetVariableEx", 125: "AutomaticInput", 126: "KeyPermission",
     130: "Teleport", 140: "Sound", 150: "Picture", 151: "ScreenColor",

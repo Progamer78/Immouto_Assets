@@ -27,7 +27,7 @@ python tools/prepare_game.py --stage
 build/windows-app/WolfPort.exe build/game
 ```
 
-The frontend renders the original title prompt, main menu, opening dialogue, choices and home screen. Recorded input advances the opening, opens Save and writes slot 2 with its original menu details and a native JPEG thumbnail. Full native save/load commands and partial saved-variable/database reads now have regression coverage. Map drawing, movement/collision and broader gameplay remain unfinished; original Windows saves are incompatible. Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
+The frontend renders the original title prompt, main menu, opening dialogue, choices and home screen. Recorded input advances the opening, opens Save and writes slot 2 with its original menu details and a native JPEG thumbnail. Full native save/load commands and partial saved-variable/database reads now have regression coverage. Map drawing, movement/collision and broader gameplay remain unfinished; original Windows binary saves require the separate [PC conversion/import path](docs/PC_SAVES.md). Development snapshots use the app's storage directory; incompatible resumes are preserved separately before a fresh startup. See [reproducible local checks](docs/VALIDATION.md).
 
 With an existing C++17 toolchain and CMake, the portable core can instead be built without SDL:
 
@@ -74,7 +74,11 @@ On iPhone, the app's folder is exposed in **Files -> On My iPhone -> Monochrome*
 
 The bottom **Menu -> Save states** provides three separate snapshots of the current moment, including active dialogue, choices and animations. Save or load a state without replacing normal save slots. After saving, find `states/slot1.json` through `slot3.json` in the app's Files folder; long-press a file and choose Share to send it for troubleshooting. Normal launches still use the title screen. Loading a state restores game memory; ordinary save files and cheat settings remain separate.
 
-**Menu -> Cheats** is off by default. Enable it for Money, AP, Vigor and Battle score controls, or enter a game variable number to edit it. Each value can be frozen or pinned. Show pinned HUD displays up to six pins while playing; `[F]` marks a frozen value. Disable cheats releases all freezes, while values already changed stay changed. Make a save state before experimenting. Pins and freezes persist in `cheats.json`.
+The movable **C** button opens Cheats directly; **Menu -> Cheats** also works. Search by original variable name, custom pin name, ID or value. **New search** starts a scan; **Refine results** searches only the previous matches. For unknown values, capture an **Any / baseline** scan, close and play, then refine with Changed, Unchanged, Increased or Decreased. Select a result to edit, freeze, pin or **Rename** it. Searches survive closing the panel. Pins/freezes stay in `cheats.json`, independent of saves. Cheats starts off; editing or freezing turns it on. Turning it off releases freezes.
+
+The control strip now includes literal **A** and **B** keys beside Menu. These are separate from Confirm/Cancel, including when other game controls are disabled.
+
+To transfer a PC save, use the Windows converter and **Menu -> Import PC save**; see [PC save instructions](docs/PC_SAVES.md). Renaming a binary `.sav` to `.json` does not convert it. Imports use vacant normal slots and leave the current session intact.
 
 ## Optional Apple signing
 

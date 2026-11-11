@@ -38,3 +38,15 @@ public:
     }
     void tick() { if (left_) --left_; if (right_) --right_; }
 };
+
+class KeyboardLatch {
+    std::map<int, int> keys_;
+public:
+    void press(int key) { keys_[key] = 2; }
+    void reset() { keys_.clear(); }
+    wolf::Input map(wolf::Input input) const {
+        for (const auto& [key, ticks] : keys_) if (ticks) input.keyboard.insert(key);
+        return input;
+    }
+    void tick() { for (auto it = keys_.begin(); it != keys_.end();) if (--it->second == 0) it = keys_.erase(it); else ++it; }
+};

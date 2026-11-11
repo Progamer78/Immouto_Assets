@@ -4,7 +4,8 @@
 
 namespace presentation {
 constexpr int controls_height = 80;
-constexpr int button_count = 8;
+constexpr int button_count = 10;
+constexpr int a_button = 7, b_button = 8, menu_button = 9;
 struct Insets { float left = 0, top = 0, right = 0, bottom = 0; };
 struct Rect { float x = 0, y = 0, w = 0, h = 0; };
 inline bool contains(Rect rect, float x, float y) { return x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h; }

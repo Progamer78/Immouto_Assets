@@ -7,6 +7,9 @@
 #include <sstream>
 
 namespace play_tools {
+inline std::string literal_text(const std::string& text) {
+    std::string result;for(char ch:text) {if(ch=='\\')result+='\\';result+=ch;}return result;
+}
 struct Cursor { float x = 512, y = 288; };
 class SaveStates {
     std::filesystem::path directory_;
@@ -54,25 +57,40 @@ inline std::string variable_name(int ref) {
     for (const auto& variable : quick_variables) if (ref == variable.ref) return variable.name;
     return "Variable " + std::to_string(ref - 2000000);
 }
-struct CheatEntry { bool pinned = false, frozen = false; std::int32_t value = 0; };
+struct CheatEntry { bool pinned = false, frozen = false; std::int32_t value = 0; std::string name; };
 class Cheats {
     std::filesystem::path path_;
 public:
     bool enabled = false, show_pins = false;
     std::map<int, CheatEntry> entries;
+    std::map<int, std::string> names;
     explicit Cheats(const std::filesystem::path& storage) : path_(storage / "cheats.json") {
         for (const auto& variable : quick_variables) entries[variable.ref].pinned = true;
         if (!std::filesystem::exists(path_)) return;
         const auto data = wolf::load_json(path_.u8string());
-        if (data.at("format") != "wolf-cheats" || data.at("version") != 1) throw std::runtime_error("Incompatible cheat settings");
+        if (data.at("format") != "wolf-cheats" || (data.at("version") != 1 && data.at("version") != 2)) throw std::runtime_error("Incompatible cheat settings");
         std::map<int, CheatEntry> loaded;
         if (data.at("entries").size() > 256) throw std::runtime_error("Too many pinned or frozen variables");
         for (const auto& entry : data.at("entries")) {
             const int ref = entry.at("ref"); validate_ref(ref);
-            loaded[ref] = {entry.at("pinned"), entry.at("frozen"), entry.at("value").get<std::int32_t>()};
+            loaded[ref] = {entry.at("pinned"), entry.at("frozen"), entry.at("value").get<std::int32_t>(), entry.value("name", "")};
         }
         enabled = data.at("enabled"); show_pins = data.value("show_pins", false); entries = std::move(loaded);
     }
+    void catalog(const wolf::Json& project) {
+        const auto& types = project.at("databases").at("system").at("types");
+        if (types.size() <= 14 || !types.at(14).contains("schema")) return;
+        const auto& labels = types.at(14).at("schema").at("names");
+        for (std::size_t i = 0; i < labels.size(); ++i) names[2000000 + static_cast<int>(i)] = labels.at(i).get<std::string>();
+    }
+    std::string label(int ref) const {
+        const auto entry = entries.find(ref);
+        if (entry != entries.end() && !entry->second.name.empty()) return entry->second.name;
+        for (const auto& variable : quick_variables) if (variable.ref == ref) return variable.name;
+        const auto name = names.find(ref);
+        return name != names.end() && !name->second.empty() ? name->second : variable_name(ref);
+    }
+    void rename(int ref, std::string name) { validate_ref(ref); if (name.size() > 160) throw std::runtime_error("Name is too long"); entries[ref].name = std::move(name); }
     static void validate_ref(int ref) {
         if (ref < 2000000 || ref >= 3000000) throw std::runtime_error("Variable number must be between 0 and 999999");
     }
@@ -83,9 +101,9 @@ public:
     }
     void persist() const {
         wolf::Json saved = wolf::Json::array();
-        for (const auto& [ref, entry] : entries) if (entry.pinned || entry.frozen)
-            saved.push_back({{"ref", ref}, {"pinned", entry.pinned}, {"frozen", entry.frozen}, {"value", entry.value}});
-        wolf::atomic_save(path_.u8string(), {{"format", "wolf-cheats"}, {"version", 1}, {"enabled", enabled}, {"show_pins", show_pins}, {"entries", saved}});
+        for (const auto& [ref, entry] : entries) if (entry.pinned || entry.frozen || !entry.name.empty())
+            saved.push_back({{"ref", ref}, {"pinned", entry.pinned}, {"frozen", entry.frozen}, {"value", entry.value}, {"name", entry.name}});
+        wolf::atomic_save(path_.u8string(), {{"format", "wolf-cheats"}, {"version", 2}, {"enabled", enabled}, {"show_pins", show_pins}, {"entries", saved}});
     }
     void edit(wolf::Runtime& runtime, int ref, std::int32_t value) {
         validate_ref(ref);

@@ -26,6 +26,7 @@ struct Input {
     bool confirm = false, cancel = false, sub = false;
     bool mouse_left = false, mouse_right = false, mouse_middle = false;
     bool mouse_left_new = false, mouse_right_new = false;
+    std::set<int> keyboard;
     int mouse_x = 0, mouse_y = 0, wheel = 0;
 };
 struct Frame {
@@ -58,12 +59,16 @@ public:
     std::int32_t number(int ref, Context context = {});
     void set_number(int ref, std::int32_t value, Context context = {});
     void set_number_freezes(const std::map<int, std::int32_t>& values);
+    std::vector<int> numeric_variable_refs() const;
     std::string text(int ref, Context context = {});
     void set_text(int ref, std::string value, Context context = {});
     std::string expand(std::string value, Context context);
     Json snapshot() const;
     void restore(const Json& state);
     void return_to_title();
+    // Imports persistent PC progress into a vacant normal slot, preserving the
+    // live session. Loading it runs the game's original post-load processing.
+    int import_pc_progress(const Json& progress);
     void refresh_resources() { resources_->invalidate(); }
     Json diagnostics() const;
 
@@ -184,6 +189,7 @@ void atomic_save(const std::string& filename, const Json& state);
 void atomic_write(const std::string& filename, const std::string& bytes);
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame);
 std::array<double, 3> picture_group_zoom(const Json& picture, std::uint64_t frame);
+std::array<double, 2> picture_automatic_zoom(const Json& picture, std::uint64_t frame);
 int picture_pattern(const Json& picture, std::uint64_t frame);
 std::pair<std::int64_t, std::int64_t> picture_draw_offset(const Json& picture, std::uint64_t frame);
 }

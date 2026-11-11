@@ -6,6 +6,8 @@
 #include "images.hpp"
 #include "picture_geometry.hpp"
 #include "../frontend/play_tools.hpp"
+#include "../frontend/cheat_search.hpp"
+#include "pc_progress.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -136,6 +138,101 @@ void unsupported_is_fatal() {
     wolf::Runtime rt(project({cmd(765432), cmd(121, {2000000, 999, 0, 0})}));
     rt.start_common(0); rt.tick(); REQUIRE(!rt.error().empty()); REQUIRE(rt.number(2000000) == 0);
     REQUIRE(rt.diagnostics().at("command").at("code") == 765432);
+}
+void keyboard_queries_wait_for_the_requested_wolf_key_and_restore() {
+    auto p=project({cmd(123,{2000000,385,130}),cmd(121,{2000001,1,0,0}),
+        cmd(123,{2000002,385,148}),cmd(121,{2000003,2,0,0})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.number(2000001)==0);
+    wolf::Input b; b.keyboard.insert(148); rt.tick(b); REQUIRE(rt.number(2000001)==0);
+    wolf::Input a; a.keyboard.insert(130); rt.tick(a); REQUIRE(rt.number(2000000)==130); REQUIRE(rt.number(2000001)==1);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); REQUIRE(loaded.snapshot()==rt.snapshot());
+    loaded.tick(a); REQUIRE(loaded.number(2000003)==0);
+    loaded.tick(b); REQUIRE(loaded.error().empty()); REQUIRE(loaded.number(2000002)==148); REQUIRE(loaded.number(2000003)==2);
+    wolf::InputReplay replay(Json::array({{{"frame",0},{"keyboard",{130,148}}},{{"frame",1}}}));
+    REQUIRE(replay.input(0).keyboard==std::set<int>({130,148})); REQUIRE(replay.input(1).keyboard.empty());
+}
+void legacy104_preserves_pictures_effects_and_continues() {
+    auto p=project({cmd(150,{48,10,0,100,100,1,255,150,100,100,0},0,{"<SQUARE>"}),
+        cmd(290,{16,1,10,10,-100,-50,-20}),cmd(104),cmd(121,{2000000,1,0,0})});
+    wolf::Runtime rt(p);rt.start_common(0);rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000000)==1);
+    REQUIRE(rt.pictures().at("10").contains("color_correction"));
+    wolf::Runtime bad(project({cmd(104,{1}),cmd(121,{2000000,1,0,0})}));bad.start_common(0);bad.tick();
+    REQUIRE(!bad.error().empty());REQUIRE(bad.number(2000000)==0);
+}
+void automatic_picture_zoom_has_windows_pulse_pause_and_restores() {
+    auto p=project({cmd(150,{48,10,0,100,80,1,255,200,200,100,0},0,{"<SQUARE>"}),
+        cmd(290,{112,4,10,10,20,30,5}),cmd(180,{50})});
+    wolf::Runtime rt(p);rt.start_common(0);rt.tick();REQUIRE(rt.error().empty());
+    const auto& pic=rt.pictures().at("10");const auto start=rt.frame();
+    const auto first=wolf::picture_automatic_zoom(pic,start);REQUIRE(std::abs(first[0]-1.05)<1e-6);REQUIRE(std::abs(first[1]-1.075)<1e-6);
+    const auto peak=wolf::picture_automatic_zoom(pic,start+3);REQUIRE(std::abs(peak[0]-1.2)<1e-6);REQUIRE(std::abs(peak[1]-1.3)<1e-6);
+    REQUIRE((wolf::picture_automatic_zoom(pic,start+7)==std::array<double,2>({1,1})));
+    REQUIRE((wolf::picture_automatic_zoom(pic,start+11)==std::array<double,2>({1,1})));
+    REQUIRE(wolf::picture_automatic_zoom(pic,start+13)==first);
+    REQUIRE(pic.at("zoom")==100);REQUIRE(pic.at("zoom_y")==100);
+    const auto saved=rt.snapshot();wolf::Runtime loaded(p);loaded.restore(saved);
+    REQUIRE(wolf::picture_automatic_zoom(loaded.pictures().at("10"),start+3)==peak);
+    auto reset=project({cmd(150,{48,10,0,100,80,1,255,200,200,100,0},0,{"<SQUARE>"}),
+        cmd(290,{112,20,10,10,5,5,80}),cmd(290,{112,0,10,10,0,0,0})});
+    wolf::Runtime stopped(reset);stopped.start_common(0);stopped.tick();REQUIRE(stopped.error().empty());REQUIRE(!stopped.pictures().at("10").contains("automatic_zoom"));
+}
+void cheat_search_refines_live_values_and_keeps_named_pins() {
+    const auto base=std::filesystem::temp_directory_path()/("wolf-cheatsearch-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto p=project({});
+    for (int i=8;i<15;++i) p["databases"]["system"]["types"].push_back({{"rows",Json::array()}});
+    p["databases"]["system"]["types"][14]["schema"]["names"]={"Trust","Energy","Unused","Original name"};
+    wolf::Runtime rt(p);play_tools::Cheats cheats(base);cheats.catalog(p);
+    rt.set_number(2000000,20);rt.set_number(2000001,20);rt.set_number(2000077,20);
+    play_tools::CheatSearch search;
+    search.scan(rt,cheats,{"",20,play_tools::Comparison::Equal},false); REQUIRE(search.results.size()==3);
+    rt.set_number(2000000,21);rt.set_number(2000077,18);rt.set_number(2000088,21);
+    search.scan(rt,cheats,{"",{},play_tools::Comparison::Changed},true); REQUIRE(search.results.size()==2);
+    rt.set_number(2000000,22);
+    search.scan(rt,cheats,{"",{},play_tools::Comparison::Increased},true);REQUIRE(search.results.size()==1);REQUIRE(search.results.count(2000000));
+    search.undo(); REQUIRE(search.results.size()==2);
+    search.scan(rt,cheats,{"eNeRgY",{},play_tools::Comparison::Any},false);REQUIRE(search.results.size()==1);REQUIRE(search.results.count(2000001));
+    cheats.rename(2000003,"My renamed pin"); cheats.entries[2000003].pinned=true;cheats.persist();
+    play_tools::Cheats loaded(base);loaded.catalog(p); REQUIRE(loaded.label(2000003)=="My renamed pin");REQUIRE(loaded.entries.at(2000003).pinned);
+    search.scan(rt,loaded,{"original name",{},play_tools::Comparison::Any},false);REQUIRE(search.results.count(2000003));
+    search.scan(rt,loaded,{"renamed",{},play_tools::Comparison::Any},false);REQUIRE(search.results.count(2000003));
+    search.scan(rt,loaded,{"77",{},play_tools::Comparison::Any},false);REQUIRE(search.results.size()==1);REQUIRE(search.results.count(2000077));
+    REQUIRE(search.results.count(2000088)==0);
+    search.scan(rt,loaded,{"12345",{},play_tools::Comparison::Any},false);REQUIRE(search.results.count(2012345));REQUIRE(rt.number(2012345)==0);
+    wolf::atomic_save((base/"legacy/cheats.json").u8string(),{{"format","wolf-cheats"},{"version",1},{"enabled",true},
+        {"show_pins",true},{"entries",Json::array({{{"ref",2000013},{"pinned",true},{"frozen",true},{"value",44}}})}});
+    play_tools::Cheats legacy(base/"legacy");legacy.apply(rt);REQUIRE(rt.number(2000013)==44);
+    REQUIRE(legacy.show_pins);legacy.rename(2000013,"My AP");legacy.persist();
+    play_tools::Cheats migrated(base/"legacy");REQUIRE(migrated.entries.at(2000013).frozen);REQUIRE(migrated.label(2000013)=="My AP");
+    std::filesystem::remove_all(base);
+}
+void pc_progress_import_validates_before_writing_and_loads_normally() {
+    const auto temp=std::filesystem::temp_directory_path();
+    const auto base=temp/("wolf-pcimport-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto p=project({cmd(220,{1,2})});p["databases"]["mutable"]["types"][0]["positions"]={1000,2000};
+    wolf::Runtime rt(p,base.u8string());rt.set_number(2000007,99);
+    const auto state=rt.snapshot();
+    Json progress={{"format","wolf-pc-progress"},{"version",1},{"game_title","Living with Sister: Monochrome Fantasy"},
+        {"map",0},{"play_time_ticks",1234},{"numbers",{{"2000007",321},{"2000160",8}}},
+        {"strings",{{"3000047","Custom hero"}}},{"mutable_types",Json::array({{{"positions",{1000,2000}},{"rows",{{74,"PC value"}}}}})}};
+    const int slot=rt.import_pc_progress(progress);REQUIRE(slot==2);REQUIRE(rt.snapshot()==state);
+    const auto saved=wolf::load_json((base/"save/savedata02.sav.json").u8string());
+    REQUIRE(saved.at("numbers").at("2000302")==2);REQUIRE(saved.at("game").at("databases").at("mutable").at("types")[0].at("rows")[0][0]==74);
+    REQUIRE(rt.import_pc_progress(progress)==3); // Never replaces the occupied slot.
+    auto bad=progress;bad["mutable_types"][0]["positions"]={2000,1000};
+    bool rejected=false;try{rt.import_pc_progress(bad);}catch(...){rejected=true;}
+    REQUIRE(rejected);REQUIRE(!std::filesystem::exists(base/"save/savedata04.sav.json"));REQUIRE(rt.snapshot()==state);
+    rt.start_common(0);rt.tick();REQUIRE(rt.error().empty());REQUIRE(rt.number(2000007)==321);
+    REQUIRE(rt.text(3000047)=="Custom hero");REQUIRE(rt.number(1100000000)==74);REQUIRE(rt.text(1100000001)=="PC value");
+    REQUIRE(rt.snapshot().at("play_time_ticks")==1234);
+    REQUIRE(std::filesystem::weakly_canonical(base).parent_path()==std::filesystem::weakly_canonical(temp));
+    std::filesystem::remove_all(base);
+}
+void pc_cached_text_records_keep_labels_without_binary_font_codes() {
+    const std::string font="\1\5\3\16\42\1";
+    REQUIRE(wolf::pc_plain_text(font+"32%")=="32%");
+    REQUIRE(wolf::pc_plain_text(std::string("\1\2\5")+"Normal Mode\n"+font+"Day 7")=="Normal Mode\nDay 7");
+    REQUIRE(wolf::pc_plain_text("English/Picture/button.png")=="English/Picture/button.png");
+    bool rejected=false;try{wolf::pc_plain_text("\1\5");}catch(...){rejected=true;}REQUIRE(rejected);
 }
 void atomic_overwrite() {
     const auto path = (std::filesystem::temp_directory_path() / "wolf-port-native-test-save.json").string();
@@ -1122,6 +1219,12 @@ int main() {
         common_route_writes_target_event_self();
         manual_state_slots_preserve_choices_and_recover_errors();
         cheats_freeze_reads_and_writes_and_persist_separately();
+        cheat_search_refines_live_values_and_keeps_named_pins();
+        keyboard_queries_wait_for_the_requested_wolf_key_and_restore();
+        legacy104_preserves_pictures_effects_and_continues();
+        automatic_picture_zoom_has_windows_pulse_pause_and_restores();
+        pc_progress_import_validates_before_writing_and_loads_normally();
+        pc_cached_text_records_keep_labels_without_binary_font_codes();
         delayed_text_picture_reveal_survives_restore(); delayed_moves_use_current_position_and_can_be_cancelled();
         game_clock_is_writable_and_survives_restore();
         pending_pictures_accept_effects_and_queries_like_windows();
@@ -1163,6 +1266,6 @@ int main() {
         choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click(); entirely_empty_choice_skips_all_of_its_branches();
         sound_preload_and_release_do_not_start_playback_or_change_music_state(); se_stop_cancels_reserved_sounds_only_on_its_channel();
         sound_database_variable_resolves_original_track_metadata();
-        std::cout << "87 native runtime tests passed\n"; return 0;
+        std::cout << "93 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

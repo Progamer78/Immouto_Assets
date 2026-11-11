@@ -1,5 +1,15 @@
 # Native port status — 2026-11-11
 
+## Tools and Day 8 follow-up (2026-11-11)
+
+Command 104 at offset 757237 now matches the supplied Windows executable's inert behavior. The unmodified supplied Day 8 state passes the former 1:00 stop into the next morning. A separate continuation test enters the sleeping-interaction page with the same progress, chooses the requested submenu and follows Exit/Yes through the ending to morning. It exposed automatic picture zoom, now implemented with the reference triangle pulse and rest interval, independent X/Y scales, original anchors and save/load rebasing. This continuation test isolates the menu handler; it is not proof of the entire touch route from the earlier 23:30 bedtime gate.
+
+The new cheat panel has a movable direct-access C button, name/ID/value search, repeated refinement and changed/unchanged/increased/decreased scans, undo, named pins and freezes. Literal A/B keys are on the touch strip, with quick taps retained across simulation ticks. Original Library/Status unlock conditions remain intact. The Day 7 holiday gap is explicitly created by the original event outside early morning; no option is invented or unlocked.
+
+A Windows converter and app import menu transfer the supplied game's PC progress into vacant normal slots. The original binary is retained. Database compatibility is checked before writing; a converted supplied PC slot loads through the title menu and renders 1600 ticks without error. Cached Windows formatted labels become plain text; script/resource text retains original formatting on reload. This transfers persistent progress, not a Windows VM snapshot. See [PC instructions](docs/PC_SAVES.md).
+
+93 runtime scenarios, SDL renderer/input/audio checks and 14 Python tests pass locally. A three-second Windows software-renderer sample holds 60 FPS, 3.57 ms game work and 5.25 ms CPU work, with one 30.5 ms slow frame. These are local measurements, not fresh iPhone results or a zero-stutter guarantee. Original game JSON is unchanged. Details: [validation](reports/tools_progress_validation.json). iPhone UI/input and broader PC-save compatibility still need device feedback.
+
 **In progress. The full IPA runs on the user's iPhone, with gameplay and interface defects still being fixed. The complete game is unfinished.**
 
 ## Build 14: reported battle, save states and cheat tools

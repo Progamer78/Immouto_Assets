@@ -16,6 +16,7 @@
 #include "picture_render.hpp"
 #include "picture_blend.hpp"
 #include "play_tools_ui.hpp"
+#include "cheat_panel.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -202,10 +203,11 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         SDL_Rect source{window ? 0 : ((pattern - 1) % dx) * width, window ? 0 : ((pattern - 1) / dx) * height,
             window ? texture.width : width, window ? texture.height : height};
         if (kind == 2) source = {0, 0, texture.width, texture.height};
-        const float zoom = p.at("zoom").get<float>() / 100.f;
-        const float zoom_y = p.at("zoom_y").get<float>() / 100.f;
+        const auto automatic=wolf::picture_automatic_zoom(p,frame);
+        const float zoom = p.at("zoom").get<float>() / 100.f * static_cast<float>(automatic[0]);
+        const float zoom_y = p.at("zoom_y").get<float>() / 100.f * static_cast<float>(automatic[1]);
         const auto [shift_x, shift_y] = wolf::picture_draw_offset(p, frame);
-        auto area = wolf::picture_area(p, width, height);
+        auto area = wolf::picture_area(p, width*automatic[0], height*automatic[1]);
         if (pointer && game_cursor_picture(p)) {
             area.x += pointer->x - p.at("x").get<double>();
             area.y += pointer->y - p.at("y").get<double>();
@@ -284,7 +286,7 @@ presentation::Layout display_area(SDL_Window* window, SDL_Renderer* renderer, in
 #endif
     return presentation::layout(output_w, output_h, width, height, insets, controls_visible);
 }
-void draw_controls_toggle(SDL_Renderer* renderer, presentation::Rect rect) {
+void draw_controls_toggle(SDL_Renderer* renderer, presentation::Rect rect, bool cheats = false) {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     auto circle = [&](float x, float y, float radius) {
         for (int dy = -static_cast<int>(radius); dy <= static_cast<int>(radius); ++dy) {
@@ -295,17 +297,48 @@ void draw_controls_toggle(SDL_Renderer* renderer, presentation::Rect rect) {
     SDL_SetRenderDrawColor(renderer, 35, 35, 35, 220);
     circle(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
     SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
+    if (cheats) {
+        std::vector<SDL_FPoint> arc;
+        for (int angle=45;angle<=315;angle+=9) { const float radians=angle*3.14159265f/180;
+            arc.push_back({rect.x+rect.w/2+std::cos(radians)*rect.w/5,rect.y+rect.h/2+std::sin(radians)*rect.h/5}); }
+        SDL_RenderDrawLinesF(renderer,arc.data(),static_cast<int>(arc.size())); return;
+    }
     const float r = rect.w / 19;
     for (int i = -1; i <= 1; ++i) {
         circle(rect.x + rect.w / 2 + i * rect.w / 5, rect.y + rect.h / 2, r);
     }
 }
+presentation::Rect draw_cheat_panel(SDL_Window* window, SDL_Renderer* renderer, Assets& assets, const std::vector<play_tools::PanelWidget>& widgets, bool present = true) {
+    SDL_SetRenderTarget(renderer,nullptr); SDL_RenderSetLogicalSize(renderer,0,0); SDL_RenderSetScale(renderer,1,1); SDL_RenderSetViewport(renderer,nullptr);
+    SDL_SetRenderDrawColor(renderer,10,13,20,255); SDL_RenderClear(renderer);
+    const auto area=display_area(window,renderer,1024,576,false).game;
+    SDL_Rect viewport{static_cast<int>(area.x),static_cast<int>(area.y),static_cast<int>(area.w),static_cast<int>(area.h)};
+    SDL_RenderSetViewport(renderer,&viewport); SDL_RenderSetScale(renderer,area.w/1024,area.h/576);
+    std::size_t index=0;
+    for (const auto& widget:widgets) {
+        const auto& r=widget.rect;
+        if (widget.id) {
+            SDL_SetRenderDrawColor(renderer,widget.selected?36:27,widget.selected?82:35,widget.selected?125:49,255);
+            SDL_FRect box{r.x,r.y,r.w,r.h}; SDL_RenderFillRectF(renderer,&box);
+        }
+        auto& text=assets.text_picture({{"content",play_tools::literal_text(widget.text)},{"text_style",{{"size",widget.font},{"speed",0},{"shadow",0},{"antialias",1}}}},"$cheatpanel:"+std::to_string(index++));
+        const SDL_Rect clip{static_cast<int>(r.x+7),static_cast<int>(r.y),static_cast<int>(r.w-14),static_cast<int>(r.h)};
+        SDL_RenderSetClipRect(renderer,&clip);
+        SDL_SetTextureBlendMode(text.value,SDL_BLENDMODE_BLEND); SDL_SetTextureColorMod(text.value,widget.id?235:170,widget.id?241:190,widget.id?250:212); SDL_SetTextureAlphaMod(text.value,255);
+        const SDL_FRect dest{r.x+8,r.y+(widget.id>=1000?2:6),static_cast<float>(text.width),static_cast<float>(text.height)};
+        SDL_RenderCopyF(renderer,text.value,nullptr,&dest); SDL_RenderSetClipRect(renderer,nullptr);
+    }
+    SDL_RenderSetScale(renderer,1,1); SDL_RenderSetViewport(renderer,nullptr);
+    if (present) SDL_RenderPresent(renderer);
+    if (++assets.generation%60==0) assets.trim();
+    return area;
+}
 int show_app_menu(SDL_Window* window, bool mouse_mode, bool show_performance) {
     const SDL_MessageBoxButtonData buttons[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Keep playing"},
         {0, 1, "Return to title"}, {0, 2, mouse_mode ? "Use direct touch" : "Enable mouse mode"},
-        {0, 3, show_performance ? "Hide FPS monitor" : "Show FPS monitor"}, {0, 4, "Save states"}, {0, 5, "Cheats"}};
+        {0, 3, show_performance ? "Hide FPS monitor" : "Show FPS monitor"}, {0, 4, "Save states"}, {0, 5, "Cheats"}, {0, 6, "Import PC save"}};
     const SDL_MessageBoxData box{SDL_MESSAGEBOX_INFORMATION, window, "Game menu",
-        "Mouse mode: drag to move the cursor, tap to click, hold then release to right-click.", 6, buttons, nullptr};
+        "Mouse mode: drag to move the cursor, tap to click, hold then release to right-click.", 7, buttons, nullptr};
     int selected = 0;
     if (SDL_ShowMessageBox(&box, &selected) != 0) return 0;
     play_tools::finish_modal(window);
@@ -446,6 +479,8 @@ int main(int argc, char** argv) {
         }
         Lifecycle lifecycle(&runtime, save_path);
         play_tools::SaveStates manual_states(storage);
+        fs::create_directories(storage / "imports");
+        play_tools::CheatPanel cheat_panel;
         std::unique_ptr<play_tools::Cheats> cheats;
         try { cheats = std::make_unique<play_tools::Cheats>(storage); }
         catch (const std::exception& error) {
@@ -455,6 +490,7 @@ int main(int argc, char** argv) {
             cheats = std::make_unique<play_tools::Cheats>(storage);
         }
         cheats->apply(runtime);
+        cheats->catalog(runtime.project());
         auto& paused = lifecycle.paused;
         bool running = true;
         auto seconds = [] { return static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency(); };
@@ -466,10 +502,12 @@ int main(int argc, char** argv) {
         wolf::Input input;
         CancelButton cancel_button;
         MouseClickLatch direct_click;
+        KeyboardLatch key_click;
         Trackpad trackpad; trackpad.x = width / 2.f; trackpad.y = height / 2.f;
         bool pad_touch_active = false;
         SDL_FingerID pad_finger = 0;
         presentation::FloatingToggle controls_toggle;
+        presentation::FloatingToggle cheats_toggle; cheats_toggle.x=.90f; cheats_toggle.y=0;
         bool controls_visible = false, mouse_mode = false, show_performance = false;
         const auto controls_settings = storage / "controls.json";
         if (fs::exists(controls_settings)) try {
@@ -479,9 +517,10 @@ int main(int argc, char** argv) {
             show_performance = settings.value("show_performance", false);
             controls_toggle.x = std::clamp(settings.value("x", 1.f), 0.f, 1.f);
             controls_toggle.y = std::clamp(settings.value("y", 0.f), 0.f, 1.f);
+            cheats_toggle.x=std::clamp(settings.value("cheats_x",.90f),0.f,1.f); cheats_toggle.y=std::clamp(settings.value("cheats_y",0.f),0.f,1.f);
         } catch (...) { SDL_Log("Using default touch-control settings"); }
         auto save_controls = [&] {
-            try { wolf::atomic_save(controls_settings.u8string(), {{"visible", controls_visible}, {"x", controls_toggle.x}, {"y", controls_toggle.y}, {"mouse_mode", mouse_mode}, {"show_performance", show_performance}}); }
+            try { wolf::atomic_save(controls_settings.u8string(), {{"visible", controls_visible}, {"x", controls_toggle.x}, {"y", controls_toggle.y}, {"mouse_mode", mouse_mode}, {"show_performance", show_performance}, {"cheats_x",cheats_toggle.x}, {"cheats_y",cheats_toggle.y}}); }
             catch (...) { SDL_Log("Could not save touch-control settings"); }
         };
         bool compatibility_notice = false;
@@ -496,7 +535,8 @@ int main(int argc, char** argv) {
             if (previous_frame) metrics.add(frame_start - previous_frame, previous_work, previous_game);
             previous_frame = frame_start;
             bool keyboard_menu = false;
-            bool ui_mouse = controls_toggle.captured();
+            bool open_cheats=false;
+            bool ui_mouse = controls_toggle.captured() || cheats_toggle.captured();
             const auto event_display = display_area(window, renderer, width, height, controls_visible);
             int event_window_w = 0, event_window_h = 0, event_output_w = 0, event_output_h = 0;
             SDL_GetWindowSize(window, &event_window_w, &event_window_h); SDL_GetRendererOutputSize(renderer, &event_output_w, &event_output_h);
@@ -515,6 +555,7 @@ int main(int argc, char** argv) {
                     trackpad.reset();
                     pad_touch_active = false;
                     direct_click.reset();
+                    key_click.reset();
                 }
                 if (event.type == SDL_APP_DIDENTERFOREGROUND ||
                     (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)) {
@@ -523,7 +564,12 @@ int main(int argc, char** argv) {
                 }
                 if (event.type == SDL_MOUSEBUTTONDOWN) {
                     const auto [px, py] = pointer(event.button.x, event.button.y);
-                    const bool overlay = event.button.button == SDL_BUTTON_LEFT && controls_toggle.press(event_display.safe, toggle_size, px, py);
+                    const bool overlay = event.button.button == SDL_BUTTON_LEFT && (cheats_toggle.press(event_display.safe,toggle_size,px,py) || controls_toggle.press(event_display.safe, toggle_size, px, py));
+                    if (event.button.button==SDL_BUTTON_LEFT && presentation::contains(event_display.controls,px,py)) {
+                        const int button=static_cast<int>((px-event_display.controls.x)*presentation::button_count/event_display.controls.w);
+                        if (button==presentation::a_button || button==presentation::b_button)
+                            key_click.press(button==presentation::a_button?130:148);
+                    }
                     ui_mouse |= overlay;
                     const bool pad_press = mouse_mode && !overlay && event.button.button == SDL_BUTTON_LEFT && presentation::contains(event_display.game, px, py);
                     if (pad_press) trackpad.press(event.button.x, event.button.y, SDL_GetTicks());
@@ -557,6 +603,12 @@ int main(int argc, char** argv) {
                     const auto [px, py] = pointer(event.motion.x, event.motion.y);
                     controls_toggle.move(event_display.safe, toggle_size, px, py, 8 * density); ui_mouse = true;
                 }
+                if (event.type==SDL_MOUSEMOTION && cheats_toggle.captured()) {
+                    const auto [px,py]=pointer(event.motion.x,event.motion.y); cheats_toggle.move(event_display.safe,toggle_size,px,py,8*density); ui_mouse=true;
+                }
+                if (event.type==SDL_MOUSEBUTTONUP && event.button.button==SDL_BUTTON_LEFT && cheats_toggle.captured()) {
+                    open_cheats=cheats_toggle.release(); ui_mouse=true; save_controls();
+                }
                 if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && controls_toggle.captured()) {
                     if (controls_toggle.release()) controls_visible = !controls_visible;
                     ui_mouse = true;
@@ -564,6 +616,9 @@ int main(int argc, char** argv) {
                 }
                 if (event.type == SDL_MOUSEWHEEL) input.wheel += event.wheel.y;
                 if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_F12 && !event.key.repeat) keyboard_menu = true;
+                if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_F10 && !event.key.repeat) open_cheats=true;
+                if (event.type==SDL_KEYDOWN && !event.key.repeat && (event.key.keysym.scancode==SDL_SCANCODE_A || event.key.keysym.scancode==SDL_SCANCODE_B))
+                    key_click.press(event.key.keysym.scancode==SDL_SCANCODE_A?130:148);
                 if (event.type == SDL_CONTROLLERDEVICEADDED && !controller && SDL_IsGameController(event.cdevice.which))
                     controller = SDL_GameControllerOpen(event.cdevice.which);
                 if (event.type == SDL_CONTROLLERDEVICEREMOVED && controller &&
@@ -585,8 +640,11 @@ int main(int argc, char** argv) {
             const auto* keys = SDL_GetKeyboardState(nullptr);
             auto pad = [&](SDL_GameControllerButton button) { return controller && SDL_GameControllerGetButton(controller, button); };
             auto touch = [&](int index) { return !ui_mouse && !trackpad.captured() && input.mouse_left && presentation::contains(display.controls, pointer_x, pointer_y) &&
-                pointer_x >= display.controls.x + index * display.controls.w / 8 && pointer_x < display.controls.x + (index + 1) * display.controls.w / 8; };
-            const bool open_menu = (touch(7) && input.mouse_left_new) || keyboard_menu;
+                pointer_x >= display.controls.x + index * display.controls.w / presentation::button_count && pointer_x < display.controls.x + (index + 1) * display.controls.w / presentation::button_count; };
+            const bool open_menu = (touch(presentation::menu_button) && input.mouse_left_new) || keyboard_menu;
+            input.keyboard.clear();
+            if (keys[SDL_SCANCODE_A] || touch(presentation::a_button)) input.keyboard.insert(130);
+            if (keys[SDL_SCANCODE_B] || touch(presentation::b_button)) input.keyboard.insert(148);
             input.left = keys[SDL_SCANCODE_LEFT] || pad(SDL_CONTROLLER_BUTTON_DPAD_LEFT) || touch(0);
             input.up = keys[SDL_SCANCODE_UP] || pad(SDL_CONTROLLER_BUTTON_DPAD_UP) || touch(1);
             input.down = keys[SDL_SCANCODE_DOWN] || pad(SDL_CONTROLLER_BUTTON_DPAD_DOWN) || touch(2);
@@ -599,9 +657,9 @@ int main(int argc, char** argv) {
                 input.mouse_left_new = input.mouse_right_new = false;
                 input.mouse_x = input.mouse_y = -1;
             }
-            if (open_menu) {
+            if (open_menu || open_cheats) {
                 audio.pause(true);
-                const int selected = show_app_menu(window, mouse_mode, show_performance);
+                const int selected = open_cheats?5:show_app_menu(window, mouse_mode, show_performance);
                 if (selected == 1) {
                     std::lock_guard<std::mutex> lock(lifecycle.guard);
                     runtime.return_to_title(); compatibility_notice = false;
@@ -618,18 +676,48 @@ int main(int argc, char** argv) {
                         audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
                     }
                 }
-                if (selected == 5) play_tools::cheats_menu(window, *cheats, runtime, [&](const std::string& text) {
+                if (selected == 5) play_tools::show_cheat_panel(window,renderer,runtime,*cheats,cheat_panel,
+                    [&](const std::vector<play_tools::PanelWidget>& widgets) { return draw_cheat_panel(window,renderer,assets,widgets); },[&](const std::string& text) {
                     SDL_SetRenderTarget(renderer, nullptr); SDL_RenderSetLogicalSize(renderer, 1024, screen_height);
                     SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255); SDL_RenderClear(renderer);
-                    auto& texture = assets.text_picture({{"content", text}, {"text_style", {{"size",20}, {"speed",0}, {"shadow",0}, {"antialias",0}}}}, "$number-prompt");
+                    auto& texture = assets.text_picture({{"content", play_tools::literal_text(text)}, {"text_style", {{"size",20}, {"speed",0}, {"shadow",0}, {"antialias",0}}}}, "$number-prompt");
                     SDL_SetTextureBlendMode(texture.value, SDL_BLENDMODE_BLEND); SDL_SetTextureColorMod(texture.value, 255, 255, 255); SDL_SetTextureAlphaMod(texture.value, 255);
                     SDL_FRect rect{40, 80, static_cast<float>(texture.width), static_cast<float>(texture.height)};
                     SDL_RenderCopyF(renderer, texture.value, nullptr, &rect); SDL_RenderPresent(renderer);
                 }, lifecycle.guard);
+                if (selected == 6) {
+                    try {
+                        std::vector<fs::path> files;
+                        for (const auto& file:fs::directory_iterator(storage / "imports"))
+                            if (file.is_regular_file() && !file.is_symlink() && file.path().extension()==".json" && file.file_size()<32*1024*1024) files.push_back(file.path());
+                        std::sort(files.begin(),files.end());
+                        if (files.empty()) play_tools::notice(window,"Convert the PC .sav using wolf-pc-convert.exe, then copy its .pc-save.json into this app's imports folder in Files. Renaming a .sav does not convert it.");
+                        else {
+                            std::size_t page=0;
+                            for (;;) {
+                                const auto end=std::min(files.size(),page+5);std::vector<std::string> labels{"Back"};
+                                for (auto i=page;i<end;++i) labels.push_back(files[i].filename().u8string());
+                                labels.push_back("Next page");
+                                const int choice=play_tools::choose(window,"Import PC save","Import into a vacant normal slot. Existing saves and current play are kept.",labels);
+                                if (!choice) break;
+                                if (static_cast<std::size_t>(choice)==labels.size()-1) {page=end==files.size()?0:end;continue;}
+                                const auto data=wolf::load_json(files.at(page+choice-1).u8string());int slot=0;
+                                // A neutral thumbnail avoids presenting the current iPhone scene
+                                // as though it belonged to the imported PC slot.
+                                write_import_preview(writable,width,height);
+                                {std::lock_guard<std::mutex> lock(lifecycle.guard);slot=runtime.import_pc_progress(data);}
+                                assets.resources.invalidate();
+                                play_tools::notice(window,("Imported as normal slot "+std::to_string(slot)+". Return to title and use Load Game to open it.").c_str());
+                                break;
+                            }
+                        }
+                    } catch (const std::exception& error) {play_tools::notice(window,error.what());}
+                }
                 audio.pause(paused || !runtime.error().empty());
                 trackpad.reset();
                 pad_touch_active = false;
                 direct_click.reset();
+                key_click.reset();
                 input = {}; accumulator = 0; last = seconds(); pacer.reset(); metrics.reset(); previous_frame = 0; monitor_update = 0;
             }
             if (paused) {
@@ -646,10 +734,11 @@ int main(int argc, char** argv) {
             const double game_start = seconds();
             while (runtime.error().empty() && accumulator >= 1.0 / fps && steps++ < 8) {
                 { std::lock_guard<std::mutex> lock(lifecycle.guard);
-                    runtime.tick(cancel_button.map(replay ? replay->input(runtime.frame()) : mouse_mode ? trackpad.map(input) :
-                        input.mouse_x >= 0 && input.mouse_y >= 0 ? direct_click.map(input) : input)); }
+                    runtime.tick(cancel_button.map(replay ? replay->input(runtime.frame()) : key_click.map(mouse_mode ? trackpad.map(input) :
+                        input.mouse_x >= 0 && input.mouse_y >= 0 ? direct_click.map(input) : input))); }
                 trackpad.tick();
                 direct_click.tick();
+                key_click.tick();
                 audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
                 accumulator -= 1.0 / fps;
                 input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
@@ -689,8 +778,8 @@ int main(int argc, char** argv) {
                 } else if (i == 5) {
                     SDL_RenderDrawLine(renderer, cx - 9, cy - 9, cx + 9, cy + 9); SDL_RenderDrawLine(renderer, cx - 9, cy + 9, cx + 9, cy - 9);
                 } else {
-                    const Json label = {{"content", i == 6 ? "Sub" : "Menu"}, {"text_style", {{"size", 20}, {"shadow", 0}, {"speed", 0}, {"antialias", 1}}}};
-                    auto& text = assets.text_picture(label, i == 6 ? "$control:sub" : "$control:menu");
+                    const Json label = {{"content", i == 6 ? "Sub" : i == presentation::a_button ? "A" : i == presentation::b_button ? "B" : "Menu"}, {"text_style", {{"size", 20}, {"shadow", 0}, {"speed", 0}, {"antialias", 1}}}};
+                    auto& text = assets.text_picture(label, "$control:" + std::to_string(i));
                     SDL_SetTextureBlendMode(text.value, SDL_BLENDMODE_BLEND); SDL_SetTextureColorMod(text.value, 230, 230, 230); SDL_SetTextureAlphaMod(text.value, 255);
                     const SDL_FRect area{cx - text.width / 2.f, cy - text.height / 2.f, static_cast<float>(text.width), static_cast<float>(text.height)};
                     SDL_RenderCopyF(renderer, text.value, nullptr, &area);
@@ -731,6 +820,7 @@ int main(int argc, char** argv) {
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawLinesF(renderer, arrow, 5);
             }
             draw_controls_toggle(renderer, controls_toggle.bounds(display.safe, toggle_size));
+            draw_controls_toggle(renderer, cheats_toggle.bounds(display.safe,toggle_size),true);
             if (show_performance || (cheats->enabled && cheats->show_pins)) {
                 if (now >= monitor_update) {
                     const auto reading = metrics.read(fps);
@@ -745,6 +835,10 @@ int main(int argc, char** argv) {
                 draw_performance(renderer, assets, monitor_text, display, density);
             }
             const bool captured = !capture_path.empty() && (runtime.frame() >= static_cast<std::uint64_t>(capture_target) || !runtime.error().empty());
+            if (captured && SDL_getenv("WOLF_CAPTURE_TOOLS")) {
+                if (std::string(SDL_getenv("WOLF_CAPTURE_TOOLS"))=="all") cheat_panel.tab=0;
+                draw_cheat_panel(window,renderer,assets,cheat_panel.widgets(runtime,*cheats),false);
+            }
             if (captured) capture_frame(renderer, capture_path.c_str(), runtime, metrics.read(fps), real_time);
             previous_work = seconds() - frame_start;
             SDL_RenderPresent(renderer);

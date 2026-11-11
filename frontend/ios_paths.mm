@@ -7,6 +7,35 @@
 #include <climits>
 #include <cstdlib>
 
+extern "C" char* wolf_ios_prompt_text(SDL_Window* window, const char* title, const char* initial) {
+    __block char* result = nullptr;
+    void (^show)(void) = ^{ @autoreleasepool {
+        SDL_SysWMinfo info{}; SDL_VERSION(&info.version);
+        if (!SDL_GetWindowWMInfo(window, &info) || info.subsystem != SDL_SYSWM_UIKIT) return;
+        UIViewController* presenter = info.info.uikit.window.rootViewController;
+        while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+        UIAlertController* alert = [UIAlertController alertControllerWithTitle:[NSString stringWithUTF8String:title]
+            message:nil preferredStyle:UIAlertControllerStyleAlert];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField* field) {
+            field.text = [NSString stringWithUTF8String:initial];
+            field.clearButtonMode = UITextFieldViewModeAlways;
+            field.autocorrectionType = UITextAutocorrectionTypeNo;
+            field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        }];
+        UITextField* input = alert.textFields.firstObject;
+        __block BOOL done = NO;
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction* action) { done=YES; }]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Apply" style:UIAlertActionStyleDefault handler:^(UIAlertAction* action) {
+            result=strdup(input.text.UTF8String ?: ""); done=YES;
+        }]];
+        [presenter presentViewController:alert animated:YES completion:nil];
+        while (!done || presenter.presentedViewController==alert)
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    }};
+    if ([NSThread isMainThread]) show(); else dispatch_sync(dispatch_get_main_queue(),show);
+    return result;
+}
+
 extern "C" void wolf_ios_wait_for_alert_dismissal(SDL_Window* window) {
     void (^wait)(void) = ^{ @autoreleasepool {
         SDL_SysWMinfo info{}; SDL_VERSION(&info.version);

@@ -1,0 +1,81 @@
+{
+  "game_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c",
+  "original_game_unchanged": true,
+  "new_runtime_tests": 93,
+  "python_tests": 14,
+  "command104": {
+    "offset": 757237,
+    "supplied_day8_state": true,
+    "unmodified_state_bedtime_continuation": "Passed 1:00 former stop; reached next morning",
+    "windows_reference": "Six captures with/without 104 have identical SHA-256; message and color effects remain; following commands execute"
+  },
+  "blank_option": {
+    "supplied_day7_state": true,
+    "source_event": "Common 310, commands 184-192",
+    "finding": "Fourth picture-button pair is explicitly erased outside early morning; fifth remains at y400. No option invented or unlocked."
+  },
+  "icons": {
+    "changed": false,
+    "status_gate": "V334, set by original skill tutorial",
+    "library_gate": "Map1/event29 and V64, requires original Status picture; user confirmed PC unlock behavior"
+  },
+  "exit_continuation": {
+    "method": "Isolated continuation: supplied progress and source unchanged; entered original map1/event4/page4 directly to exercise requested interaction independently of the preceding bedtime gate.",
+    "extra_error_found": "290 [112,20,6100,6100,5,5,80], common339 offset3831676",
+    "fix": "Automatic X/Y percentage pulse with rest interval, original anchors, Show preservation, load rebasing.",
+    "windows_reference": "Nineteen measured 100x80 rectangle samples match triangle expansion/return, 5-frame rest, fixed top-left/center anchors. The final capture was incomplete and excluded.",
+    "exit_button": "294, English/Picture/endbutton.png; clicked and confirmed Yes; ending sequence runs without compatibility stop",
+    "result": "Exit at frame135554, Yes at135934; ending reached morning dialogue at137832, with no compatibility stop."
+  },
+  "pc_save": {
+    "source": "Local supplied Windows SaveData04.sav; kept private and unmodified",
+    "conversion": "Windows .exe, no Python dependency",
+    "validated": "Fresh converted supplied PC SaveData04.sav, 30 mutable types, imported into vacant slot2 without first running it; title Load selected slot2 and rendered to tick1600 without error. Existing slots preserved.",
+    "limits": "Persistent progress only; original load scheduling, not Windows VM/picture snapshot. Cached formatted strings become plain labels; phone display preferences are retained."
+  },
+  "cheats": {
+    "access": "Movable C button, Menu or F10",
+    "search": [
+      "original names",
+      "custom pin names",
+      "IDs",
+      "values",
+      "refine prior results",
+      "changed",
+      "unchanged",
+      "increased",
+      "decreased",
+      "undo"
+    ],
+    "pins": "Name/pin/freeze/edit with migrated v1 config; config stays separate from game/state files",
+    "ui_checks": [
+      "Pinned panel rendered and inspected",
+      "All-variable catalog rendered without missing glyphs",
+      "Old v1 pins/freezes survive v2 rename migration"
+    ]
+  },
+  "keyboard": {
+    "A": 130,
+    "B": 148,
+    "touch_strip": "A/B before Menu, above safe area",
+    "quick_tap_latch": true
+  },
+  "device_tested": false,
+  "local_frontend_timing": {
+    "cpu_ms": 5.247531664402535,
+    "fps": 60.0,
+    "frame_ms": 16.666666666666668,
+    "game_ms": 3.5682299998976914,
+    "peak_ms": 30.486500007100403,
+    "real_time": true,
+    "slow_frames": 1
+  },
+  "tests": {
+    "windows_release_runtime_scenarios": 93,
+    "windows_app_suites": 3,
+    "windows_core_release_suites": 1,
+    "python": 14,
+    "ios_sdk": "Pending Actions",
+    "device_tested": false
+  }
+}
