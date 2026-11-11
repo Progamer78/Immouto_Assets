@@ -1,0 +1,181 @@
+{
+  "date": "2026-11-11",
+  "scope": "Follow-up stutter/latency improvements and exact build-12 battle-stop fix",
+  "reported_failure": {
+    "map": 1,
+    "context": {
+      "common": -1,
+      "event": 8,
+      "page": 0
+    },
+    "command": {
+      "args": [
+        16,
+        1,
+        3090,
+        3090,
+        0,
+        0,
+        0
+      ],
+      "code": 290,
+      "indent": 1,
+      "offset": 217884,
+      "strings": []
+    }
+  },
+  "device_build12_feedback": {
+    "screenshot_application_fps": 60.0,
+    "frame_ms": 16.7,
+    "cpu_ms": 5.3,
+    "game_ms": 4.2,
+    "peak_ms": 19.4,
+    "slow_frames": 0,
+    "metal_hud_fps": 59.99,
+    "gpu_ms": 1.81,
+    "memory_mb": 542.94,
+    "note": "Screenshot during compatibility stop; not a sustained whole-game benchmark"
+  },
+  "additional_performance_changes": [
+    "Invalidate only overwritten/deleted images and their tinted variants after a save preview; retain room/UI textures",
+    "Enable stb JPEG NEON kernels on ARM64 (stb requires explicit opt-in)",
+    "Replace per-pixel floating-point colour scaling with byte lookup tables, preserving output and alpha",
+    "Composite the game hover cursor at physical display resolution after game scaling",
+    "Evict unused cached textures on an iOS low-memory event"
+  ],
+  "color_benchmark": {
+    "identical_pixels": true,
+    "lookup_ms": 1.4814925,
+    "scalar_ms": 2.817125,
+    "speedup": 1.901545232257335
+  },
+  "cursor_pixel_check": {
+    "renderer": "SDL software, three display pixels per game pixel",
+    "cursor_game_x": [
+      20.05,
+      20.4
+    ],
+    "leftmost_display_pixel": [
+      60,
+      61
+    ],
+    "result": "one physical pixel movement without game-pixel quantization"
+  },
+  "battle_fix": {
+    "operations": [
+      "Persistent colour correction with timed transition, type 1",
+      "Single flash fading back to the persistent correction, type 0",
+      "Clear-all includes both new colour effects; Show retains them; full save/load shifts their clocks"
+    ],
+    "reported_command_native_rendered_fixture": "pass; uses original command object at offset 217884",
+    "reference": "Isolated supplied Windows executable with generated solid RGB fixture, no original file changes",
+    "reference_rgb": [
+      [
+        80,
+        120,
+        160
+      ],
+      [
+        120,
+        60,
+        255
+      ],
+      [
+        110,
+        75,
+        255
+      ],
+      [
+        60,
+        90,
+        120
+      ],
+      [
+        100,
+        150,
+        200
+      ],
+      [
+        91,
+        104,
+        201
+      ],
+      [
+        139,
+        208,
+        255
+      ],
+      [
+        80,
+        120,
+        160
+      ],
+      [
+        80,
+        120,
+        160
+      ]
+    ],
+    "native_rgb": [
+      [
+        80,
+        120,
+        160
+      ],
+      [
+        120,
+        60,
+        255
+      ],
+      [
+        110,
+        75,
+        255
+      ],
+      [
+        59,
+        89,
+        119
+      ],
+      [
+        100,
+        150,
+        200
+      ],
+      [
+        90,
+        105,
+        200
+      ],
+      [
+        140,
+        210,
+        255
+      ],
+      [
+        80,
+        120,
+        160
+      ],
+      [
+        80,
+        120,
+        160
+      ]
+    ],
+    "max_channel_difference": 2,
+    "limit": "Small intermediate RGB rounding differences remain; complete Day 4 battle not replayed without its save"
+  },
+  "checks": {
+    "runtime_scenarios": 83,
+    "sdl_input_rendering_file_cache_metrics_checks": "pass",
+    "production_audio_pcm_test": "pass",
+    "bedroom_menu_continuations": "pass",
+    "game_ir_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c"
+  },
+  "new_ipa_device_tested": false,
+  "references": [
+    "https://github.com/nothings/stb/blob/master/stb_image.h",
+    "https://miniaud.io/docs/manual/"
+  ]
+}

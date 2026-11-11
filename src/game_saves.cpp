@@ -48,7 +48,7 @@ void Runtime::apply_game_load() {
     // Keep the interpreter clock monotonic while preserving animation ages.
     state["frame"] = loaded_frame;
     for (auto& picture : state.at("pictures")) {
-        for (const char* effect : {"tween", "fade_erase", "flicker", "shake", "pattern_effect", "text_reveal", "zoom_effect"})
+        for (const char* effect : {"tween", "fade_erase", "flicker", "shake", "pattern_effect", "text_reveal", "zoom_effect", "color_correction", "flash"})
             if (picture.contains(effect) && picture.at(effect).contains("start"))
                 picture[effect]["start"] = picture.at(effect).at("start").get<std::uint64_t>() + shift;
     }

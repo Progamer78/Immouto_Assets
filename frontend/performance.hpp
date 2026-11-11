@@ -4,6 +4,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cctype>
+#include <filesystem>
+#include <set>
+#include <string>
 
 // Keep deadlines anchored to the clock, rather than adding a sleep after each
 // vsynced frame. A missed deadline starts a new interval without a render burst.
@@ -60,5 +64,23 @@ void trim_texture_cache(Cache& cache, std::size_t limit, std::uint64_t generatio
         }
         if (oldest == cache.end()) break;
         bytes -= oldest->second->bytes(); cache.erase(oldest);
+    }
+}
+
+inline std::string image_file_key(std::string path) {
+    std::replace(path.begin(), path.end(), '\\', '/');
+    path = std::filesystem::u8path(path).lexically_normal().generic_u8string();
+    std::transform(path.begin(), path.end(), path.begin(), [](unsigned char c) { return std::tolower(c); });
+    return path;
+}
+
+template<class Cache, class Operations>
+void invalidate_file_textures(Cache& cache, const Operations& operations) {
+    std::set<std::string> changed;
+    for (const auto& operation : operations) changed.insert(image_file_key(operation.at("path").template get<std::string>()));
+    for (auto it = cache.begin(); it != cache.end();) {
+        if (it->second && !it->second->source_file.empty() && changed.count(image_file_key("Data/" + it->second->source_file)))
+            it = cache.erase(it);
+        else ++it;
     }
 }

@@ -58,15 +58,21 @@ int main() {
         for (int i = 0; i < 120; ++i) metrics.add(1.0 / 60, .004, .002);
         if (metrics.read(60).slow) throw std::runtime_error("FPS monitor must age out old stalls");
         metrics.reset(); if (metrics.read(60).fps != 0) throw std::runtime_error("Paused menu time must not contaminate the FPS monitor");
-        struct CacheEntry { std::size_t size; std::uint64_t last_used; std::size_t bytes() const { return size; } };
+        struct CacheEntry { std::size_t size; std::uint64_t last_used; std::string source_file; std::size_t bytes() const { return size; } };
         std::map<int, std::unique_ptr<CacheEntry>> cache;
-        cache[1] = std::make_unique<CacheEntry>(CacheEntry{100, 1});
-        cache[2] = std::make_unique<CacheEntry>(CacheEntry{200, 2});
-        cache[3] = std::make_unique<CacheEntry>(CacheEntry{300, 3});
+        cache[1] = std::make_unique<CacheEntry>(CacheEntry{100, 1, ""});
+        cache[2] = std::make_unique<CacheEntry>(CacheEntry{200, 2, ""});
+        cache[3] = std::make_unique<CacheEntry>(CacheEntry{300, 3, ""});
         trim_texture_cache(cache, 400, 3);
         if (cache.size() != 1 || !cache.count(3)) throw std::runtime_error("Texture budget must evict old textures first");
         trim_texture_cache(cache, 100, 3);
         if (!cache.count(3)) throw std::runtime_error("Visible textures must remain resident when their working set exceeds the budget");
+        cache[1] = std::make_unique<CacheEntry>(CacheEntry{100, 3, "../Save/Preview.JPG"});
+        cache[2] = std::make_unique<CacheEntry>(CacheEntry{100, 3, "cg/room.jpg"});
+        cache[4] = std::make_unique<CacheEntry>(CacheEntry{100, 3, "../Save/Preview.JPG"});
+        invalidate_file_textures(cache, wolf::Json::array({{{"path", "Save\\preview.jpg"}}}));
+        if (cache.count(1) || cache.count(4) || !cache.count(2) || !cache.count(3))
+            throw std::runtime_error("A changed preview and its tint must reload without evicting the room or UI");
         const auto hidden = presentation::layout(2796, 1290, 1024, 576, {132,0,132,63}, false);
         const auto shown = presentation::layout(2796, 1290, 1024, 576, {132,0,132,63}, true);
         if (hidden.game.h <= shown.game.h || hidden.game.y + hidden.game.h > 1227.01f || hidden.controls.h != 0 ||

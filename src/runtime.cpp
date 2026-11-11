@@ -593,6 +593,8 @@ void Runtime::apply_picture_change(const Json& action) {
         if (previous.contains("zoom_effect")) target["zoom_effect"] = previous.at("zoom_effect");
         if (previous.contains("shake")) target["shake"] = previous.at("shake");
         if (previous.contains("pattern_effect")) target["pattern_effect"] = previous.at("pattern_effect");
+        if (previous.contains("color_correction")) target["color_correction"] = previous.at("color_correction");
+        if (previous.contains("flash")) target["flash"] = previous.at("flash");
         if (action.at("same_zoom") == true && !previous.empty()) { target["zoom"] = previous.at("zoom"); target["zoom_y"] = previous.at("zoom_y"); }
         if (action.at("same_color") == true && !previous.empty()) for (const char* color : {"red", "green", "blue"}) target[color] = previous.value(color, 100);
         if (target.contains("text_reveal")) {
@@ -690,7 +692,7 @@ void Runtime::advance_pictures() {
 void Runtime::picture_effect(const Json& cmd, Context c) {
     const int options = arg(cmd, 0), type = (options >> 4) & 31;
     if ((options & ~511) || (options & 15) != 0 || cmd.at("args").size() != 7 ||
-        (type != 2 && type != 3 && type != 4 && type != 5 && type != 6 && type != 7 && type != 8 && type != 9 && type != 10 && type != 25))
+        (type != 0 && type != 1 && type != 2 && type != 3 && type != 4 && type != 5 && type != 6 && type != 7 && type != 8 && type != 9 && type != 10 && type != 25))
         fail("Unsupported picture-effect target or layout");
     const int duration = std::max(0, number(arg(cmd, 1), c));
     const int first = number(arg(cmd, 2), c), last = number(arg(cmd, 3), c);
@@ -706,7 +708,25 @@ void Runtime::picture_effect(const Json& cmd, Context c) {
         if (type == 25) {
             // Effect state is independent of Show/Move properties and their
             // interpolation. The battle cursor clears effects this way.
-            for (const char* field : {"draw_shift", "zoom_effect", "shake", "flicker", "pattern_effect", "automatic_zoom"}) picture.erase(field);
+            for (const char* field : {"draw_shift", "zoom_effect", "shake", "flicker", "pattern_effect", "automatic_zoom", "color_correction", "flash"}) picture.erase(field);
+            continue;
+        }
+        if (type == 0) {
+            if (!duration || color == Json::array({0, 0, 0})) picture.erase("flash");
+            else picture["flash"] = {{"start", frame_ + 1}, {"duration", duration}, {"color", color}};
+            continue;
+        }
+        if (type == 1) {
+            std::array<double, 3> from{};
+            if (picture.contains("color_correction")) {
+                const auto& previous = picture.at("color_correction");
+                const auto start = previous.at("start").get<std::uint64_t>(), time = previous.at("duration").get<std::uint64_t>();
+                const double fraction = time ? static_cast<double>(std::min(frame_ >= start ? frame_ - start : 0, time)) / time : 1;
+                for (int i = 0; i < 3; ++i) from[i] = previous.at("from").at(i).get<double>() +
+                    (previous.at("to").at(i).get<double>() - previous.at("from").at(i).get<double>()) * fraction;
+            }
+            if (!duration && color == Json::array({0, 0, 0})) picture.erase("color_correction");
+            else picture["color_correction"] = {{"start", frame_ + 1}, {"duration", duration}, {"from", from}, {"to", color}};
             continue;
         }
         if (type == 7) { picture.erase("automatic_zoom"); continue; }
@@ -887,6 +907,20 @@ std::array<double, 3> picture_group_zoom(const Json& picture, std::uint64_t fram
 
 std::array<double, 3> picture_tint(const Json& picture, std::uint64_t frame) {
     std::array<double, 3> result{picture.value("red", 100.0), picture.value("green", 100.0), picture.value("blue", 100.0)};
+    if (picture.contains("color_correction")) {
+        const auto& effect = picture.at("color_correction");
+        const auto start = effect.at("start").get<std::uint64_t>(), duration = effect.at("duration").get<std::uint64_t>();
+        const double fraction = duration ? static_cast<double>(std::min(frame >= start ? frame - start : 0, duration)) / duration : 1;
+        for (int i = 0; i < 3; ++i) result[i] += effect.at("from").at(i).get<double>() +
+            (effect.at("to").at(i).get<double>() - effect.at("from").at(i).get<double>()) * fraction;
+    }
+    if (picture.contains("flash")) {
+        const auto& effect = picture.at("flash");
+        const auto start = effect.at("start").get<std::uint64_t>(), duration = effect.at("duration").get<std::uint64_t>();
+        const double amount = duration ? 1 - static_cast<double>(std::min(frame >= start ? frame - start : 0, duration)) / duration : 0;
+        for (int i = 0; i < 3; ++i) result[i] += effect.at("color").at(i).get<double>() * amount;
+    }
+    for (auto& channel : result) channel = std::max(0.0, channel);
     if (!picture.contains("flicker")) return result;
     const auto& flicker = picture.at("flicker");
     const auto start = flicker.at("start").get<std::uint64_t>();

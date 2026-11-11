@@ -351,15 +351,36 @@ void clear_picture_effects_preserves_base_picture_and_move() {
     auto p = project({cmd(150, {48, 10, 0, 40, 20, 1, 123, 50, 60, 100, 0}, 0, {"<SQUARE>"}),
         cmd(290, {32, 0, 10, 10, 20, 5, 0}), cmd(290, {64, 0, 10, 10, 0, 0, 150}),
         cmd(290, {48, 5, 10, 10, 8, 9, 10}), cmd(290, {80, 5, 10, 10, 20, 10, 5}),
+        cmd(290, {16, 0, 10, 10, 50, -20, 100}), cmd(290, {0, 10, 10, 10, 100, 100, 100}),
         cmd(290, {144, 3, 10, 10, 1, 4, 0}), cmd(180, {1}),
         cmd(290, {400, 0, 10, 10, 0, 0, 0})});
     wolf::Runtime rt(p); rt.start_common(0); rt.tick();
     REQUIRE(rt.pictures().at("10").contains("draw_shift")); REQUIRE(rt.pictures().at("10").contains("flicker"));
     wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.error().empty());
     const auto& picture = loaded.pictures().at("10");
-    for (const char* field : {"draw_shift", "zoom_effect", "shake", "flicker", "pattern_effect"}) REQUIRE(!picture.contains(field));
+    for (const char* field : {"draw_shift", "zoom_effect", "shake", "flicker", "pattern_effect", "color_correction", "flash"}) REQUIRE(!picture.contains(field));
     REQUIRE(picture.at("x") == 50); REQUIRE(picture.at("y") == 60); REQUIRE(picture.at("opacity") == 123);
     REQUIRE(picture.at("zoom") == 100); REQUIRE(picture.at("pattern") == 1);
+}
+void reported_battle_color_reset_completes_after_one_tick() {
+    const auto p = project({cmd(150, {0, 3090, 0, 1, 1, 1, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(290, {16, 0, 3090, 3090, -100, -100, -100}),
+        cmd(290, {16, 1, 3090, 3090, 0, 0, 0}), cmd(180, {999})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(wolf::picture_tint(rt.pictures().at("3090"), rt.frame())[0] == 0);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.error().empty());
+    const auto tint = wolf::picture_tint(loaded.pictures().at("3090"), loaded.frame());
+    REQUIRE((tint == std::array<double, 3>({100, 100, 100}))); REQUIRE(loaded.pictures().at("3090").at("red") == 100);
+}
+void flash_fades_back_to_persistent_color_and_survives_resume() {
+    const auto p = project({cmd(150, {0, 3, 0, 1, 1, 1, 255, 20, 30, 100, 0}, 0, {"test.png"}),
+        cmd(290, {16, 0, 3, 3, -100, -100, -100}), cmd(290, {0, 20, 3, 3, 100, 100, 100}), cmd(180, {999})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    const auto& picture = rt.pictures().at("3");
+    REQUIRE(wolf::picture_tint(picture, 1)[0] == 100); REQUIRE(wolf::picture_tint(picture, 6)[0] == 75);
+    REQUIRE(wolf::picture_tint(picture, 21)[0] == 0); REQUIRE(wolf::picture_tint(picture, 100)[0] == 0);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot());
+    REQUIRE(wolf::picture_tint(loaded.pictures().at("3"), 6) == wolf::picture_tint(picture, 6));
 }
 void data_resource_caches_invalidate_and_save_resources_stay_live() {
     const auto temp = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
@@ -800,6 +821,14 @@ void image_brightening_clamps_rgb_and_preserves_alpha() {
     const auto tinted = wolf::adjust_image_color(original, {200, 50, 125});
     REQUIRE(tinted == std::vector<unsigned char>({255, 25, 250, 37, 0, 127, 125, 0}));
     REQUIRE(original.at(0) == 128);
+    std::vector<unsigned char> ramp;
+    for (int value = 0; value < 256; ++value) for (int channel = 0; channel < 4; ++channel) ramp.push_back(static_cast<unsigned char>(value));
+    const auto colors = wolf::adjust_image_color(ramp, {152.75, 47.5, 300});
+    for (int value = 0; value < 256; ++value) {
+        REQUIRE(colors[value * 4] == static_cast<unsigned char>(std::min(255.0, value * 1.5275)));
+        REQUIRE(colors[value * 4 + 1] == static_cast<unsigned char>(value * .475));
+        REQUIRE(colors[value * 4 + 2] == std::min(255, value * 3)); REQUIRE(colors[value * 4 + 3] == value);
+    }
 }
 void inline_sound_metadata_overrides_command_fields() {
     wolf::Runtime rt(project({cmd(140, {0x02000020, 0, 0, 0, 12, 50}, 0, {"se.ogg\r\n80\r\n100"}),
@@ -1015,6 +1044,7 @@ int main() {
         unrecognized_message_escapes_are_literal_text();
         image_dimensions_cache_before_path_lookup_and_invalidate();
         clear_picture_effects_preserves_base_picture_and_move();
+        reported_battle_color_reset_completes_after_one_tick(); flash_fades_back_to_persistent_color_and_survives_resume();
         data_resource_caches_invalidate_and_save_resources_stay_live();
         native_save_write_invalidates_file_existence_queries();
         delayed_se_dispatch_survives_restore();
@@ -1044,6 +1074,6 @@ int main() {
         choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click(); entirely_empty_choice_skips_all_of_its_branches();
         sound_preload_and_release_do_not_start_playback_or_change_music_state(); se_stop_cancels_reserved_sounds_only_on_its_channel();
         sound_database_variable_resolves_original_track_metadata();
-        std::cout << "81 native runtime tests passed\n"; return 0;
+        std::cout << "83 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

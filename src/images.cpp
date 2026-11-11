@@ -11,15 +11,22 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
+#if defined(__ARM_NEON) || defined(__aarch64__)
+// stb enables x86 SIMD automatically, but ARM JPEG acceleration is opt-in.
+#define STBI_NEON
+#endif
 #include <stb/stb_image.h>
 
 namespace wolf {
 std::vector<unsigned char> adjust_image_color(const std::vector<unsigned char>& rgba, const std::array<double, 3>& percent) {
     if (rgba.size() % 4) throw std::runtime_error("Invalid RGBA image buffer");
     for (double channel : percent) if (!std::isfinite(channel)) throw std::runtime_error("Invalid image color factor");
+    std::array<std::array<unsigned char, 256>, 3> lookup{};
+    for (std::size_t channel = 0; channel < 3; ++channel) for (int value = 0; value < 256; ++value)
+        lookup[channel][value] = static_cast<unsigned char>(std::clamp(value * percent[channel] / 100.0, 0.0, 255.0));
     auto result = rgba;
     for (std::size_t i = 0; i < result.size(); i += 4) for (std::size_t channel = 0; channel < 3; ++channel)
-        result[i + channel] = static_cast<unsigned char>(std::clamp(rgba[i + channel] * percent[channel] / 100.0, 0.0, 255.0));
+        result[i + channel] = lookup[channel][rgba[i + channel]];
     return result;
 }
 

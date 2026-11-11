@@ -73,6 +73,7 @@ struct Texture {
     int width = 0, height = 0;
     int logical_width = 0, logical_height = 0, border = 0;
     std::string revision;
+    std::string source_file;
     std::vector<unsigned char> pixels;
     std::uint64_t last_used = 0;
     std::size_t bytes() const { return pixels.size() + static_cast<std::size_t>(width) * height * 4; }
@@ -84,7 +85,7 @@ struct Assets {
     std::map<std::string, std::unique_ptr<Texture>> textures;
     TextRasterizer text;
     std::uint64_t generation = 1;
-    void trim() { trim_texture_cache(textures, 192u * 1024 * 1024, generation); }
+    void trim(std::size_t limit = 192u * 1024 * 1024) { trim_texture_cache(textures, limit, generation); }
     explicit Assets(fs::path path, SDL_Renderer* output, const Json& project, const fs::path& writable) : resources(path.u8string(), writable.u8string()), renderer(output),
         text(path, project.at("game"), project.at("databases").at("system").at("types").at(12).at("rows")) {}
     Texture& text_picture(const Json& picture, const std::string& cache_name = {}) {
@@ -117,6 +118,7 @@ struct Assets {
             texture->value = SDL_CreateTextureFromSurface(renderer, surface);
             texture->width = width; texture->height = height;
             texture->pixels.assign(pixels, pixels + static_cast<std::size_t>(width) * height * 4); texture->revision = filename;
+            texture->source_file = filename;
             SDL_FreeSurface(surface); stbi_image_free(pixels);
             if (!texture->value) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
@@ -158,6 +160,7 @@ struct Assets {
             auto texture = std::make_unique<Texture>(); texture->width = base.width; texture->height = base.height;
             texture->logical_width = base.logical_width; texture->logical_height = base.logical_height; texture->border = base.border;
             texture->revision = revision;
+            texture->source_file = base.source_file;
             texture->value = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, base.width, base.height);
             if (!texture->value || SDL_UpdateTexture(texture->value, nullptr, pixels.data(), base.width * 4) != 0) throw std::runtime_error(SDL_GetError());
             slot = std::move(texture);
@@ -167,13 +170,15 @@ struct Assets {
 };
 
 void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures, std::uint64_t frame,
-    int first_id = std::numeric_limits<int>::min(), int end_id = std::numeric_limits<int>::max(), const Trackpad* pointer = nullptr) {
+    int first_id = std::numeric_limits<int>::min(), int end_id = std::numeric_limits<int>::max(), const Trackpad* pointer = nullptr,
+    const presentation::Rect* cursor_output = nullptr) {
     std::vector<const Json*> ordered;
     for (const auto& item : pictures) ordered.push_back(&item);
     std::sort(ordered.begin(), ordered.end(), [](const Json* a, const Json* b) { return a->at("id").get<int>() < b->at("id").get<int>(); });
     for (const Json* ptr : ordered) {
         const auto& p = *ptr;
         if (p.at("id").get<int>() < first_id || p.at("id").get<int>() >= end_id) continue;
+        if (pointer && game_cursor_picture(p) && !cursor_output) continue;
         const int kind = p.at("kind");
         if (kind == -1) continue; // Empty record allocated by a delayed show.
         if (kind > 4) throw std::runtime_error("Unsupported picture display type");
@@ -213,6 +218,11 @@ void draw_pictures(SDL_Renderer* renderer, Assets& assets, const Json& pictures,
         destination.x = group[0] + (destination.x - group[0]) * group[2];
         destination.y = group[1] + (destination.y - group[1]) * group[2];
         destination.w *= group[2]; destination.h *= group[2];
+        if (cursor_output) {
+            const float sx = cursor_output->w / 1024.f, sy = cursor_output->h / 576.f;
+            destination.x = cursor_output->x + destination.x * sx; destination.y = cursor_output->y + destination.y * sy;
+            destination.w *= sx; destination.h *= sy;
+        }
         if (group[2] == 0) continue;
         const int blend = p.at("blend");
         if (blend == 2 || blend > 3) throw std::runtime_error("Unsupported picture blend mode");
@@ -474,6 +484,7 @@ int main(int argc, char** argv) {
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_QUIT) running = false;
+                if (event.type == SDL_APP_LOWMEMORY) assets.trim(0);
                 if (event.type == SDL_APP_WILLENTERBACKGROUND ||
                     (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)) {
                     std::lock_guard<std::mutex> lock(lifecycle.guard);
@@ -616,7 +627,9 @@ int main(int argc, char** argv) {
             const auto file_operations = runtime.take_file_operations();
             if (!file_operations.empty()) {
                 process_file_operations(renderer, writable, file_operations, width, height);
-                assets.textures.clear(); assets.resources.invalidate();
+                // A changed save preview must not evict the entire room, fonts
+                // and UI, forcing all of them to decode on the following frame.
+                invalidate_file_textures(assets.textures, file_operations); assets.resources.invalidate();
             }
             for (int i = 0; i < presentation::button_count; ++i) {
                 SDL_Rect rect{i * width / presentation::button_count + 3, height + 3, width / presentation::button_count - 6, presentation::controls_height - 6};
@@ -655,6 +668,15 @@ int main(int argc, char** argv) {
             const auto& pictures = runtime.pictures();
             const bool game_pointer_visible = pictures.contains("10000") && game_cursor_picture(pictures.at("10000")) &&
                 pictures.at("10000").at("opacity").get<int>() > 0 && pictures.at("10000").at("zoom") != 0 && pictures.at("10000").at("zoom_y") != 0;
+            if (mouse_mode && game_pointer_visible) {
+                // Composite the cursor after upscaling the game, retaining
+                // physical-pixel motion instead of quantizing it to 1024x576.
+                const SDL_Rect clip{static_cast<int>(display.game.x), static_cast<int>(display.game.y),
+                    static_cast<int>(std::ceil(display.game.w)), static_cast<int>(std::ceil(display.game.h))};
+                SDL_RenderSetClipRect(renderer, &clip);
+                draw_pictures(renderer, assets, pictures, runtime.frame(), 10000, 10001, &trackpad, &display.game);
+                SDL_RenderSetClipRect(renderer, nullptr);
+            }
             if (mouse_mode && !game_pointer_visible) {
                 const float cx = display.game.x + trackpad.x * display.game.w / width, cy = display.game.y + trackpad.y * display.game.h / height;
                 const float size = 14 * density;
