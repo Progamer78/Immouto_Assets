@@ -4,11 +4,11 @@ This is an early native test build. Opening, home, save/load, Training and Readi
 
 ## Update the installed game
 
-Download **`Monochrome-unsigned.ipa`** from **[iOS build 8 - picture transforms and morning progression](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-8-1)**. This update is **1,003,717 bytes (about 1 MB)** and reuses the assets installed by full build 5. Its Actions build passed in 45 seconds; the downloaded archive passed ZIP, SHA-256 and ARM64 checks. The updated version still needs testing on the phone.
+Download **`Monochrome-unsigned.ipa`** from **[iOS build 9 - movable controls, choices and audio](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-9-1)**. This update is **1,011,157 bytes (about 1 MB)** and reuses the assets installed by full build 5. Its Actions build passed in 39 seconds; the downloaded archive passed ZIP, SHA-256 and ARM64 checks. The updated version still needs testing on the phone.
 
-Install it with Sideloadly **over the existing Monochrome app**, using the same Apple ID and bundle identifier as before. **Do not uninstall the current app**: its Documents directory contains the game assets and saved slots. After updating, use the original title's Continue/Load option to select your save. The new bottom Menu button offers Return to title; controls now fit within the iPhone safe area.
+Install it with Sideloadly **over the existing Monochrome app**, using the same Apple ID and bundle identifier as before. **Do not uninstall the current app**: its Documents directory contains the game assets and saved slots. After updating, use the original title's Continue/Load option to select your save. Controls start hidden so the game picture can use more space. Tap the floating three-dot button to show/hide the bottom controls; drag that button to move it. Its position and visibility are saved. The bottom Menu button offers Return to title. The × button now sends the game's Cancel/right-click input, including to custom menus.
 
-This small IPA requires the existing asset cache. For a first installation or a device without that cache, install the full build below before applying build 8. The user confirmed that the prior thin update worked. Keep using the same signing/install settings to preserve the app data; build 8 still needs phone verification.
+This small IPA requires the existing asset cache. For a first installation or a device without that cache, install the full build below before applying build 9. The user confirmed that the prior thin update worked. Keep using the same signing/install settings to preserve the app data; build 9 still needs phone verification.
 
 ## First installation: full game IPA
 
@@ -26,6 +26,6 @@ A free Apple account's signature lasts seven days; refresh with Sideloadly. Inst
 
 ## First checks and controls
 
-Try the opening and New Game, then Training, Reading and Save. Tap the original game buttons; the updated bottom strip also provides arrows, Confirm, Cancel, Sub and Menu. Menu offers Return to title, with confirmation before discarding unsaved progress. Normal launches show the title so you can load a saved slot. In the title's Load menu, hover/select a slot then use the bottom Confirm button if a direct tap does not confirm it.
+Tap the floating three-dot button to show the controls, or drag it somewhere comfortable. Try the opening and New Game, then Training, Reading and Save. Tap the original game buttons; the updated bottom strip also provides arrows, Confirm, Cancel, Sub and Menu. Menu offers Return to title, with confirmation before discarding unsaved progress. Normal launches show the title so you can load a saved slot. In the title's Load menu, hover/select a slot then use the bottom Confirm button if a direct tap does not confirm it.
 
 If it stops, keep the displayed error and the app's files in **Files → On My iPhone → Monochrome** for troubleshooting. Do not delete its saved data. Device startup, memory, audio and later gameplay are still being validated.
