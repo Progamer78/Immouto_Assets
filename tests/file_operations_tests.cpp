@@ -4,6 +4,7 @@
 #include "picture_render.hpp"
 #include "picture_geometry.hpp"
 #include "controls.hpp"
+#include "trackpad.hpp"
 #include <stb/stb_image.h>
 #include <chrono>
 #include <fstream>
@@ -53,6 +54,21 @@ int main() {
         CancelButton cancel; wolf::Input pressed; pressed.cancel = true;
         const auto first = cancel.map(pressed), held = cancel.map(pressed); cancel.map({}); const auto again = cancel.map(pressed);
         if (!first.mouse_right_new || !first.mouse_right || held.mouse_right_new || !again.mouse_right_new) throw std::runtime_error("Cancel must act as one right-click edge per press");
+        MouseClickLatch quick_tap; quick_tap.press(true);
+        const auto quick_first = quick_tap.map({}); quick_tap.tick(); const auto quick_held = quick_tap.map({}); quick_tap.tick();
+        if (!quick_first.mouse_left_new || !quick_first.mouse_left || quick_held.mouse_left_new || !quick_held.mouse_left || quick_tap.map({}).mouse_left)
+            throw std::runtime_error("A direct tap released between ticks must reach held-state game menus exactly once");
+        Trackpad pad;
+        pad.press(50, 50, 100); pad.move(100, 70, 2, 1024, 576); pad.release(300);
+        if (pad.x != 612 || pad.y != 328 || pad.map({}).mouse_left) throw std::runtime_error("Trackpad drag must move the cursor without clicking");
+        pad.press(20, 20, 400); pad.release(450);
+        const auto tap = pad.map({}); pad.tick(); const auto tap_held = pad.map({}); pad.tick();
+        if (!tap.mouse_left_new || !tap.mouse_left || tap_held.mouse_left_new || !tap_held.mouse_left || pad.map({}).mouse_left)
+            throw std::runtime_error("Trackpad tap must produce one new click and a brief held state");
+        pad.press(20, 20, 500); pad.release(1000);
+        if (!pad.map({}).mouse_right_new || !pad.map({}).mouse_right || pad.map({}).mouse_left) throw std::runtime_error("Trackpad long press must right-click");
+        pad.reset(); pad.press(10, 10, 1000); pad.move(-5000, 9000, 2, 1024, 576); pad.release(2000);
+        if (pad.x != 0 || pad.y != 575 || pad.map({}).mouse_left || pad.map({}).mouse_right) throw std::runtime_error("Trackpad cursor must stay inside the game and not click after dragging");
         const auto safe = presentation::fit(2796, 1290, 1024, 656, {132, 0, 132, 63});
         if (safe.x < 132 || safe.x + safe.w > 2664 || safe.y < 0 || safe.y + safe.h > 1227.01f)
             throw std::runtime_error("iPhone presentation overlaps a notch or home gesture area");

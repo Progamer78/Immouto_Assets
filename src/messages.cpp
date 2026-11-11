@@ -1,4 +1,5 @@
 #include "runtime.hpp"
+#include "text.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -23,6 +24,7 @@ void Runtime::show_message(Run& run, const Json& command) {
             if (content[i] == '\\' && i + 1 < content.size()) {
                 const auto start = i;
                 const char code = content[++i];
+                if (literal_text_escape(content, start)) { drawing.push_back('\\'); ++count; continue; }
                 if (code == '>' || code == '<') {
                     if (count != 0) fail("Mid-message reveal-speed controls are not implemented");
                     instant = code == '>'; ++i; continue;

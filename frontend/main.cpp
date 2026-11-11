@@ -10,6 +10,7 @@
 #include "window.hpp"
 #include "presentation.hpp"
 #include "controls.hpp"
+#include "trackpad.hpp"
 #include "picture_geometry.hpp"
 #include "picture_render.hpp"
 #include <SDL.h>
@@ -266,13 +267,21 @@ void draw_controls_toggle(SDL_Renderer* renderer, presentation::Rect rect) {
         circle(rect.x + rect.w / 2 + i * rect.w / 5, rect.y + rect.h / 2, r);
     }
 }
-bool show_app_menu(SDL_Window* window) {
+int show_app_menu(SDL_Window* window, bool mouse_mode) {
     const SDL_MessageBoxButtonData buttons[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Keep playing"},
-        {0, 1, "Return to title"}};
+        {0, 1, "Return to title"}, {0, 2, mouse_mode ? "Use direct touch" : "Enable mouse mode"}};
     const SDL_MessageBoxData box{SDL_MESSAGEBOX_INFORMATION, window, "Game menu",
-        "Return to the title screen? Unsaved progress will be lost. Your saved slots are kept.", 2, buttons, nullptr};
+        "Mouse mode: drag to move the cursor, tap to click, hold then release to right-click.", 3, buttons, nullptr};
     int selected = 0;
-    return SDL_ShowMessageBox(&box, &selected) == 0 && selected == 1;
+    if (SDL_ShowMessageBox(&box, &selected) != 0) return 0;
+    if (selected == 1) {
+        const SDL_MessageBoxButtonData confirm[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Keep playing"}, {0, 1, "Return to title"}};
+        const SDL_MessageBoxData question{SDL_MESSAGEBOX_WARNING, window, "Return to title?",
+            "Unsaved progress will be lost. Your saved slots are kept.", 2, confirm, nullptr};
+        int answer = 0;
+        if (SDL_ShowMessageBox(&question, &answer) != 0 || answer != 1) return 0;
+    }
+    return selected;
 }
 void capture_frame(SDL_Renderer* renderer, const char* filename, const wolf::Runtime& runtime) {
     int width = 0, height = 0;
@@ -384,15 +393,22 @@ int main(int argc, char** argv) {
         double last = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency(), accumulator = 0;
         wolf::Input input;
         CancelButton cancel_button;
+        MouseClickLatch direct_click;
+        Trackpad trackpad; trackpad.x = width / 2.f; trackpad.y = height / 2.f;
         presentation::FloatingToggle controls_toggle;
-        bool controls_visible = false;
+        bool controls_visible = false, mouse_mode = false;
         const auto controls_settings = storage / "controls.json";
         if (fs::exists(controls_settings)) try {
             const auto settings = wolf::load_json(controls_settings.u8string());
             controls_visible = settings.value("visible", false);
+            mouse_mode = settings.value("mouse_mode", false);
             controls_toggle.x = std::clamp(settings.value("x", 1.f), 0.f, 1.f);
             controls_toggle.y = std::clamp(settings.value("y", 0.f), 0.f, 1.f);
         } catch (...) { SDL_Log("Using default touch-control settings"); }
+        auto save_controls = [&] {
+            try { wolf::atomic_save(controls_settings.u8string(), {{"visible", controls_visible}, {"x", controls_toggle.x}, {"y", controls_toggle.y}, {"mouse_mode", mouse_mode}}); }
+            catch (...) { SDL_Log("Could not save touch-control settings"); }
+        };
         bool compatibility_notice = false;
         while (running && !runtime.quit_requested()) {
             bool keyboard_menu = false;
@@ -411,6 +427,8 @@ int main(int argc, char** argv) {
                     std::lock_guard<std::mutex> lock(lifecycle.guard);
                     if (runtime.error().empty()) wolf::atomic_save(save_path.u8string(), runtime.snapshot());
                     paused = true; accumulator = 0;
+                    trackpad.reset();
+                    direct_click.reset();
                 }
                 if (event.type == SDL_APP_DIDENTERFOREGROUND ||
                     (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)) paused = false;
@@ -418,9 +436,17 @@ int main(int argc, char** argv) {
                     const auto [px, py] = pointer(event.button.x, event.button.y);
                     const bool overlay = event.button.button == SDL_BUTTON_LEFT && controls_toggle.press(event_display.safe, toggle_size, px, py);
                     ui_mouse |= overlay;
-                    input.mouse_left_new |= event.button.button == SDL_BUTTON_LEFT && !overlay;
+                    const bool pad_press = mouse_mode && !overlay && event.button.button == SDL_BUTTON_LEFT && presentation::contains(event_display.game, px, py);
+                    if (pad_press) trackpad.press(event.button.x, event.button.y, SDL_GetTicks());
+                    if (!mouse_mode && !overlay && presentation::contains(event_display.game, px, py) &&
+                        (event.button.button == SDL_BUTTON_LEFT || event.button.button == SDL_BUTTON_RIGHT)) direct_click.press(event.button.button == SDL_BUTTON_LEFT);
+                    input.mouse_left_new |= event.button.button == SDL_BUTTON_LEFT && !overlay && !pad_press;
                     input.mouse_right_new |= event.button.button == SDL_BUTTON_RIGHT;
                 }
+                if (event.type == SDL_MOUSEMOTION && trackpad.captured())
+                    trackpad.move(event.motion.x, event.motion.y, width * density / event_display.game.w, width, height);
+                if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && trackpad.captured())
+                    trackpad.release(SDL_GetTicks());
                 if (event.type == SDL_MOUSEMOTION && controls_toggle.captured()) {
                     const auto [px, py] = pointer(event.motion.x, event.motion.y);
                     controls_toggle.move(event_display.safe, toggle_size, px, py, 8 * density); ui_mouse = true;
@@ -428,8 +454,7 @@ int main(int argc, char** argv) {
                 if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && controls_toggle.captured()) {
                     if (controls_toggle.release()) controls_visible = !controls_visible;
                     ui_mouse = true;
-                    try { wolf::atomic_save(controls_settings.u8string(), {{"visible", controls_visible}, {"x", controls_toggle.x}, {"y", controls_toggle.y}}); }
-                    catch (...) { SDL_Log("Could not save touch-control settings"); }
+                    save_controls();
                 }
                 if (event.type == SDL_MOUSEWHEEL) input.wheel += event.wheel.y;
                 if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_F12 && !event.key.repeat) keyboard_menu = true;
@@ -453,7 +478,7 @@ int main(int argc, char** argv) {
             input.mouse_middle = (buttons & SDL_BUTTON_MMASK) != 0;
             const auto* keys = SDL_GetKeyboardState(nullptr);
             auto pad = [&](SDL_GameControllerButton button) { return controller && SDL_GameControllerGetButton(controller, button); };
-            auto touch = [&](int index) { return !ui_mouse && input.mouse_left && presentation::contains(display.controls, pointer_x, pointer_y) &&
+            auto touch = [&](int index) { return !ui_mouse && !trackpad.captured() && input.mouse_left && presentation::contains(display.controls, pointer_x, pointer_y) &&
                 pointer_x >= display.controls.x + index * display.controls.w / 8 && pointer_x < display.controls.x + (index + 1) * display.controls.w / 8; };
             const bool open_menu = (touch(7) && input.mouse_left_new) || keyboard_menu;
             input.left = keys[SDL_SCANCODE_LEFT] || pad(SDL_CONTROLLER_BUTTON_DPAD_LEFT) || touch(0);
@@ -469,10 +494,14 @@ int main(int argc, char** argv) {
                 input.mouse_x = input.mouse_y = -1;
             }
             if (open_menu) {
-                if (show_app_menu(window)) {
+                const int selected = show_app_menu(window, mouse_mode);
+                if (selected == 1) {
                     std::lock_guard<std::mutex> lock(lifecycle.guard);
                     runtime.return_to_title(); compatibility_notice = false;
                 }
+                if (selected == 2) { mouse_mode = !mouse_mode; save_controls(); }
+                trackpad.reset();
+                direct_click.reset();
                 input = {}; accumulator = 0;
             }
             const double now = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
@@ -481,7 +510,11 @@ int main(int argc, char** argv) {
             last = now;
             int steps = 0;
             while (runtime.error().empty() && accumulator >= 1.0 / fps && steps++ < 8) {
-                { std::lock_guard<std::mutex> lock(lifecycle.guard); runtime.tick(cancel_button.map(replay ? replay->input(runtime.frame()) : input)); }
+                { std::lock_guard<std::mutex> lock(lifecycle.guard);
+                    runtime.tick(cancel_button.map(replay ? replay->input(runtime.frame()) : mouse_mode ? trackpad.map(input) :
+                        input.mouse_x >= 0 && input.mouse_y >= 0 ? direct_click.map(input) : input)); }
+                trackpad.tick();
+                direct_click.tick();
                 audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
                 accumulator -= 1.0 / fps;
                 input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
@@ -534,6 +567,17 @@ int main(int argc, char** argv) {
                 const SDL_Rect controls_source{0, height, width, presentation::controls_height};
                 const SDL_FRect controls_destination{display.controls.x, display.controls.y, display.controls.w, display.controls.h};
                 if (SDL_RenderCopyF(renderer, game_target->value, &controls_source, &controls_destination) != 0) throw std::runtime_error(SDL_GetError());
+            }
+            if (mouse_mode) {
+                const float cx = display.game.x + trackpad.x * display.game.w / width, cy = display.game.y + trackpad.y * display.game.h / height;
+                const float size = 14 * density;
+                const SDL_FPoint arrow[] = {{cx,cy}, {cx + size * .2f,cy + size}, {cx + size * .45f,cy + size * .6f}, {cx + size * .85f,cy + size * .6f}, {cx,cy}};
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                for (int dy = -1; dy <= 1; ++dy) for (int dx = -1; dx <= 1; ++dx) {
+                    SDL_FPoint outline[5]; for (int i = 0; i < 5; ++i) outline[i] = {arrow[i].x + dx * density, arrow[i].y + dy * density};
+                    SDL_RenderDrawLinesF(renderer, outline, 5);
+                }
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawLinesF(renderer, arrow, 5);
             }
             draw_controls_toggle(renderer, controls_toggle.bounds(display.safe, toggle_size));
             const bool captured = !capture_path.empty() && (runtime.frame() >= static_cast<std::uint64_t>(capture_target) || !runtime.error().empty());

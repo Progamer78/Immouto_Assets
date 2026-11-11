@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-10",
+  "scope": "Bedroom submenu fidelity, literal message escapes, text bounds and requested trackpad mouse mode",
+  "local_checks": {
+    "runtime_scenarios": 77,
+    "configuration": "Release",
+    "builds": [
+      "windows-app",
+      "windows-core-release"
+    ],
+    "sdl_input_pixel_file_layout_checks": "pass",
+    "python_tests": 14,
+    "workflow_lint": "pass"
+  },
+  "choice_fix": {
+    "cause": "The parallel mouse adapter queues Confirm after the tap that opens a choice. The previous runtime accepted it as a separate selection.",
+    "behavior": "New choices wait for the opening mouse/basic press and its deferred input to be released; all original strings, conditions and branch indices remain in the unchanged IR.",
+    "mouse_query": "0 idle, 2 new press, 1 held, matching the official manual.",
+    "reference": "https://silversecond.com/WolfRPGEditor/Help/04ev_valuenext.html",
+    "windows_fixture": "An automatic Confirm queued immediately before a choice leaves the original choice open at frame 10."
+  },
+  "message_fix": {
+    "source_common": 301,
+    "source_command_index": 239,
+    "source_offset": 2506002,
+    "file": "English/RandomEvent01-05.txt",
+    "behavior": "Unrecognized backslash sequences display literally, matching the supplied Windows executable. Known unsupported controls still stop.",
+    "native_fixture": "Original file is read by opcode 122 and rendered through opcode 101 without a compatibility error."
+  },
+  "text_bounds": {
+    "cause": "A smaller initial font size retained the default height, and trailing newlines enlarged centered text pictures.",
+    "reference_heights": [
+      14,
+      14,
+      16,
+      10,
+      20,
+      20
+    ],
+    "native_heights": [
+      14,
+      14,
+      16,
+      10,
+      20,
+      20
+    ],
+    "cases": [
+      "ATK numeric value with newline",
+      "same value without newline",
+      "rank size 16",
+      "small size 10",
+      "default size 20",
+      "literal backslash at default size"
+    ],
+    "limits": "Font pixel appearance still differs from Windows; this check validates bounds and centering, not pixel identity."
+  },
+  "mouse_mode": {
+    "enable": "Show controls with three-dot toggle, then Menu -> Enable mouse mode",
+    "move": "Drag like a trackpad; moving does not click",
+    "click": "Tap after moving; brief two-tick click supports original held-state menus",
+    "cancel": "Hold without moving for at least 450 ms and release, or use Cancel",
+    "persisted": "controls.json mouse_mode setting",
+    "verification": "Native startup/cursor render and SDL fixture gestures pass; iPhone touch verification remains outstanding"
+  },
+  "limits": [
+    "Development-state continuations, not a new full end-to-end playthrough",
+    "No full-game compatibility claim",
+    "New touch behavior requires iPhone verification"
+  ],
+  "bedroom-communication-verified": {
+    "start_frame": 13250,
+    "end_frame": 13550,
+    "native_ticks_rendered": 300,
+    "choice_common": 247,
+    "choice_pc": 150,
+    "visible_original_indices": [
+      0,
+      2,
+      3
+    ],
+    "choice_waiting": true,
+    "time_and_ap_unchanged": true,
+    "capture_sha256": "aeca9c8d073ee5737957b6984885c35451c0386d6ee8c0b3c72e833bdaa3d7b6"
+  },
+  "bedroom-interaction-verified": {
+    "start_frame": 13250,
+    "end_frame": 13550,
+    "native_ticks_rendered": 300,
+    "choice_common": 246,
+    "choice_pc": 15,
+    "visible_original_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "choice_waiting": true,
+    "time_and_ap_unchanged": true,
+    "capture_sha256": "6711d896eb2f121cb1f375128b444f26b703ba3988685282bf15ad5d0b80b656"
+  },
+  "bedroom-conversation-verified": {
+    "start_frame": 13250,
+    "end_frame": 13550,
+    "native_ticks_rendered": 300,
+    "choice_common": 247,
+    "choice_pc": 156,
+    "visible_original_indices": [
+      0,
+      1,
+      2
+    ],
+    "choice_waiting": true,
+    "time_and_ap_unchanged": true,
+    "capture_sha256": "4dbbeb317e60bc1361818b3f19c981659b91966c8f3f76f926b569abfbd68c2c"
+  },
+  "bedroom-communication-cancelled": {
+    "start_frame": 13250,
+    "end_frame": 13550,
+    "native_ticks_rendered": 300,
+    "choice_common": null,
+    "choice_pc": null,
+    "visible_original_indices": [],
+    "choice_waiting": false,
+    "time_and_ap_unchanged": true,
+    "capture_sha256": "944fd6e428bec9dc35857de11ecb47fce389e5e6cb4345c4d243f21f22a51ba5"
+  },
+  "game_ir_sha256": "12e1f6057d427194f9c1d2dcba70b07bcf7367b4d83bedcec76f3f43b0f86f4c"
+}

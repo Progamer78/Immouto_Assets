@@ -224,7 +224,7 @@
   },
   "text_widths": {
     "verified": true,
-    "font": "07\u3084\u3055\u3057\u3055\u30b4\u30b7\u30c3\u30af\u30dc\u30fc\u30eb\u30c9",
+    "font": "07やさしさゴシックボールド",
     "size": 20,
     "cases": [
       "TAB",
@@ -1434,5 +1434,19 @@
       ],
       "behavior": "Delayed relative Show adds offsets to the live picture position at activation"
     }
+  },
+  "bedroom_feedback_reference": {
+    "date": "2026-11-10",
+    "deferred_confirm_keeps_new_choice_open": true,
+    "unknown_text_escape": "Literal backslash and following text retained, including unknown bracket-style tag.",
+    "text_heights": [
+      14,
+      14,
+      16,
+      10,
+      20,
+      20
+    ],
+    "isolated_fixtures_restore_copied_archives_and_data": true
   }
 }

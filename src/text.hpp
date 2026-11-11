@@ -10,6 +10,8 @@ struct TextPixels {
 };
 // Seconds at which each visible codepoint appears; formatting consumes no time.
 std::vector<double> text_reveal_times(const std::string& text, int speed);
+// Unrecognized escapes are literal text in the supplied Windows engine.
+bool literal_text_escape(const std::string& text, std::size_t position);
 class TextRasterizer {
 public:
     TextRasterizer(const std::filesystem::path& root, const wolf::Json& game, const wolf::Json& colors);

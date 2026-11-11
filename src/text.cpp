@@ -54,13 +54,26 @@ struct TextRasterizer::Impl {
 };
 TextRasterizer::TextRasterizer(const std::filesystem::path& root, const wolf::Json& game, const wolf::Json& colors) : impl_(std::make_unique<Impl>(root, game, colors)) {}
 TextRasterizer::~TextRasterizer() = default;
+bool literal_text_escape(const std::string& text, std::size_t position) {
+    if (position + 1 >= text.size() || text[position] != '\\') return false;
+    const auto start = position + 1;
+    if (std::string("EN^><!.\\").find(text[start]) != std::string::npos ||
+        text.compare(start, 2, "A+") == 0 || text.compare(start, 2, "A-") == 0) return false;
+    const auto open = text.find('[', start);
+    if (open == std::string::npos || open - start > 6) return true;
+    const auto tag = text.substr(start, open - start);
+    for (const char* known : {"f", "f+", "fR", "m", "c", "cE", "cS", "cR", "wE", "-", "font",
+        "mx", "my", "bx", "ax", "ay", "sp", "space", "r", "i", "iS", "img", "imgS", "isize", "se"})
+        if (tag == known) return false;
+    return true;
+}
 std::vector<double> text_reveal_times(const std::string& text, int speed) {
     std::vector<double> result;
     double time = 0;
     bool instant = false;
     for (std::size_t i = 0; i < text.size();) {
         if (text.compare(i, 3, "<L>") == 0 || text.compare(i, 3, "<C>") == 0 || text.compare(i, 3, "<R>") == 0) { i += 3; continue; }
-        if (text[i] == '\\' && i + 1 < text.size()) {
+        if (text[i] == '\\' && i + 1 < text.size() && !literal_text_escape(text, i)) {
             ++i;
             if (text[i] == 'E' || text[i] == 'N') { ++i; continue; }
             if (text[i] == '>' || text[i] == '<') { instant = text[i++] == '>'; continue; }
@@ -113,7 +126,7 @@ TextPixels TextRasterizer::render(const std::string& text, const wolf::Json& sty
             align = text[i + 1] == 'C' ? 1 : text[i + 1] == 'R' ? 2 : 0;
             lines.back().align = align; i += 3; continue;
         }
-        if (text[i] == '\\' && i + 1 < text.size() && text[i + 1] != '\\') {
+        if (text[i] == '\\' && i + 1 < text.size() && text[i + 1] != '\\' && !literal_text_escape(text, i)) {
             const auto begin = ++i;
             if (text[i] == 'E' || text[i] == 'N') { edge = text[i++] == 'E' ? 1 : 0; continue; }
             if (text.compare(i, 2, "A+") == 0 || text.compare(i, 2, "A-") == 0) { antialias = text[i + 1] == '+'; i += 2; continue; }
@@ -140,7 +153,7 @@ TextPixels TextRasterizer::render(const std::string& text, const wolf::Json& sty
             else if (tag == "sp") {} // Reveal timing is evaluated by the interpreter.
             else throw std::runtime_error("Unsupported text control: " + tag);
             if (size < 1 || size > 512) throw std::runtime_error("Unsupported font size");
-            lines.back().size = std::max(lines.back().size, size); continue;
+            lines.back().size = lines.back().occupied ? std::max(lines.back().size, size) : size; continue;
         }
         if (text[i] == '\\' && i + 1 < text.size() && text[i + 1] == '\\') ++i;
         const int cp = codepoint(text, i);
@@ -158,7 +171,9 @@ TextPixels TextRasterizer::render(const std::string& text, const wolf::Json& sty
     int logical_width = 0, logical_height = 0;
     for (const auto& line : lines) {
         logical_width = std::max(logical_width, static_cast<int>(std::ceil(line.width)));
-        logical_height = std::max(logical_height, static_cast<int>(std::ceil(line.top)) + line.size);
+        // Trailing empty lines do not enlarge a text picture in Game.exe.
+        // Counting them moves centered HUD values up into the rank above.
+        if (line.occupied) logical_height = std::max(logical_height, static_cast<int>(std::ceil(line.top)) + line.size);
     }
     for (const auto& glyph : glyphs) logical_height = std::max(logical_height, static_cast<int>(std::ceil(glyph.y)) + glyph.size);
     const int width = std::max(1, logical_width) + border * 2, height = std::max(1, logical_height) + border * 2;

@@ -755,7 +755,13 @@ void Runtime::show_choice(Run& run, const Json& cmd) {
         if (std::find(visible.begin(), visible.end(), selected) == visible.end()) selected = visible.front();
         choice_ = {{"owner", run.owner}, {"pc", frame.pc - 1}, {"common", frame.context.common},
             {"strings", strings}, {"selected", selected}, {"cancel", cancel},
-            {"opened", frame_}, {"repeat", 0}, {"done", false}, {"x", number(9000003)}, {"y", number(9000004)}};
+            {"opened", frame_}, {"repeat", 0}, {"done", false},
+            // The game's parallel mouse adapter queues basic Confirm on the
+            // following tick. Do not let the press opening this menu (including
+            // that deferred input) accept its first entry before release.
+            {"armed", !(input_.confirm || input_.cancel || input_.mouse_left || input_.mouse_right ||
+                input_.mouse_left_new || input_.mouse_right_new || (pending_auto_input_ & 3))},
+            {"x", number(9000003)}, {"y", number(9000004)}};
         set_number(9000020, choice_.at("selected"));
         prepare_choice_layout();
         choice_clear_after_ = 0;
@@ -802,6 +808,11 @@ void Runtime::transfer(const Json& cmd, Context context) {
 
 void Runtime::advance_choice() {
     if (choice_.empty() || choice_.at("done") == true || choice_.at("opened").get<std::uint64_t>() == frame_) return;
+    if (!choice_.value("armed", true)) {
+        if (!(input_.confirm || input_.cancel || input_.mouse_left || input_.mouse_right ||
+            input_.mouse_left_new || input_.mouse_right_new || (pending_auto_input_ & 3))) choice_["armed"] = true;
+        return;
+    }
     const int count = static_cast<int>(choice_.at("strings").size());
     std::vector<int> visible;
     for (int i = 0; i < count; ++i) if (!choice_.at("strings").at(i).get_ref<const std::string&>().empty()) visible.push_back(i);
@@ -1176,9 +1187,9 @@ void Runtime::execute(Run& run, const Json& cmd) {
         int result = 0;
         switch (arg(cmd, 2)) {
         case 0: result = map_; break;
-        case 7: result = input_.mouse_left; break;
-        case 8: result = input_.mouse_right; break;
-        case 9: result = input_.mouse_middle; break;
+        case 7: result = input_.mouse_left_new ? 2 : input_.mouse_left ? 1 : 0; break;
+        case 8: result = input_.mouse_right_new ? 2 : input_.mouse_right ? 1 : 0; break;
+        case 9: result = input_.mouse_middle && !previous_input_.mouse_middle ? 2 : input_.mouse_middle ? 1 : 0; break;
         case 10: result = input_.wheel; break;
         case 15: result = current_map()->at("width"); break;
         case 16: result = current_map()->at("height"); break;

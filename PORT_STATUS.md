@@ -2,6 +2,14 @@
 
 **In progress. The full IPA runs on the user's iPhone, with gameplay and interface defects still being fixed. The complete game is unfinished.**
 
+## Bedroom submenu fidelity and mouse mode
+
+The missing-options report was reproduced: the game's parallel mouse adapter generated a deferred Confirm that immediately accepted the first bedroom submenu entry. New choices now wait for the opening press and deferred input to be released. The original event data, option conditions and branch indices are unchanged. Native continuations verify the first Communication submenu, all six current Skinship entries, the separately selected Conversation submenu, and cancellation without spending time or AP. Each check renders 300 ticks from the successful interaction-menu state; these supersede the earlier Communication check that only verified absence of an interpreter error.
+
+Mouse state queries now distinguish a new press (2), held press (1) and idle (0). Short frontend taps survive between simulation ticks. Unrecognized backslash sequences render literally, matching the Windows executable; this fixes the reported common-301 message without editing its text. Text picture bounds use the actual initial font size and exclude trailing empty lines, correcting displaced centered HUD values. Six reference text heights match; font pixel appearance still differs.
+
+The requested trackpad mouse mode is available through Menu. Drag moves the visible cursor; tap clicks; holding without moving for 450 ms and releasing right-clicks. Direct touch remains available, and the mode persists in controls.json. Local Release checks pass 77 runtime scenarios, SDL gesture/input/layout/rendering checks and 14 Python tests. Device confirmation is still needed. See [bedroom validation](reports/bedroom_menu_validation.json).
+
 ## Movable controls, selection/cancel input and audio work
 
 The user confirmed build 8 runs, then reported bath-selection spacing, missing Cancel behavior, smaller presentation and a return-home sound stop. Empty choice strings now hide their rows and preserve original branch indices; an entirely empty choice skips its branches, matching the official command documentation. Mouse right-click and basic Cancel both cancel an allowed built-in choice. The frontend Cancel button also supplies a right-click to custom menus, including when basic keyboard input is disabled. Input edges remain pending until a simulation tick consumes them.
@@ -87,7 +95,7 @@ Every unsupported command/layout stops and records its context and event stack. 
 ## Verification and current incompatibility
 
 - Python tests: **14 passing**, including authoritative archived-game structure, archive priority/cache integrity and malformed-data/build-helper checks.
-- Native runtime: **74 passing scenarios** in the local Release build (68 passed in Debug before the debug-output addition). New cases include native save/load, saved database reads, music resume metadata, inline/optional sound fields, screenshot scheduling and Return to Title resetting live state while retaining saved settings. SDL tests cover JPEG/PNG previews and overlapping short window borders.
+- Native runtime: **77 passing scenarios** in the local Release build (68 passed in Debug before the debug-output addition). New cases include choice rearming across deferred input and restore, mouse state queries and literal message escapes. SDL tests also cover trackpad gestures, short taps, JPEG/PNG previews and overlapping short window borders.
 - Windows native application and headless runtime compile using a workspace-local Zig/CMake/Ninja toolchain.
 - GitHub workflow syntax checked with checksum-verified actionlint 1.7.7.
 - First remote [native check run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780) passed: Windows, Linux and macOS core tests, plus macOS SDL frontend compilation. It completed in approximately 65 seconds including runner setup.

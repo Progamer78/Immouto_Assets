@@ -348,6 +348,17 @@ void message_reveal_waits_and_restores() {
     automatic.start_common(0); automatic.tick(); REQUIRE(automatic.number(9000000) == 5); automatic.tick();
     REQUIRE(automatic.number(2000000) == 1); REQUIRE(automatic.error().empty());
 }
+void unrecognized_message_escapes_are_literal_text() {
+    const std::string text = "\\E\\The sample\\unknown[4]";
+    wolf::Runtime rt(project({cmd(101, {}, 0, {text}), cmd(121, {2000000, 7, 0, 0})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+    REQUIRE(rt.message_state().at("content") == text);
+    REQUIRE(rt.message_state().at("total") == 22);
+    REQUIRE(text_reveal_times(text, 60).size() == 22);
+    REQUIRE(literal_text_escape("\\Really?", 0)); REQUIRE(!literal_text_escape("\\font[1]", 0));
+    wolf::Input confirm; confirm.confirm = true; rt.tick(confirm); rt.tick();
+    REQUIRE(rt.number(2000000) == 7); REQUIRE(rt.error().empty());
+}
 void database_and_many_text_substitutions() {
     auto p = project({});
     p["databases"]["user"]["types"] = Json::array({{{"schema", {{"name", "table"}, {"names", {"row"}}}},
@@ -453,6 +464,37 @@ void automatic_basic_input_is_deferred_and_restored() {
     wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.number(2000000) == 0);
     wolf::Runtime loaded(p); loaded.restore(rt.snapshot()); loaded.tick(); REQUIRE(loaded.number(2000001) == 10);
     loaded.tick(); REQUIRE(loaded.number(2000002) == 0); REQUIRE(loaded.error().empty());
+}
+void opening_press_and_deferred_confirm_cannot_accept_choice() {
+    const auto p = project({cmd(125, {1}), cmd(102, {2}, 0, {"one", "two"}),
+        cmd(401, {2}), cmd(121, {2000000, 10, 0, 0}, 1),
+        cmd(401, {3}), cmd(121, {2000000, 20, 0, 0}, 1), cmd(499)});
+    wolf::Runtime rt(p); rt.start_common(0);
+    wolf::Input press; press.mouse_left = press.mouse_left_new = true;
+    rt.tick(press); REQUIRE(rt.choice().at("armed") == false);
+    wolf::Runtime loaded(p); loaded.restore(rt.snapshot());
+    press.mouse_left_new = false;
+    for (int i = 0; i < 30; ++i) loaded.tick(press);
+    REQUIRE(loaded.choice().at("done") == false); REQUIRE(loaded.number(2000000) == 0);
+    loaded.tick(); wolf::Input down; down.down = true; loaded.tick(down);
+    REQUIRE(loaded.choice().at("selected") == 1);
+    wolf::Input confirm; confirm.confirm = true; loaded.tick(confirm); loaded.tick();
+    REQUIRE(loaded.choice().empty()); REQUIRE(loaded.number(2000000) == 20); REQUIRE(loaded.error().empty());
+}
+void mouse_query_distinguishes_new_held_and_released() {
+    std::vector<Json> commands;
+    for (int i = 0; i < 3; ++i) commands.push_back(cmd(124, {2000000 + i, 12288, 7 + i}));
+    wolf::Runtime rt(project(commands)); wolf::Input input;
+    input.mouse_left = input.mouse_right = input.mouse_middle = true;
+    input.mouse_left_new = input.mouse_right_new = true;
+    rt.start_common(0); rt.tick(input);
+    for (int i = 0; i < 3; ++i) REQUIRE(rt.number(2000000 + i) == 2);
+    input.mouse_left_new = input.mouse_right_new = false;
+    rt.start_common(0); rt.tick(input);
+    for (int i = 0; i < 3; ++i) REQUIRE(rt.number(2000000 + i) == 1);
+    rt.start_common(0); rt.tick();
+    for (int i = 0; i < 3; ++i) REQUIRE(rt.number(2000000 + i) == 0);
+    REQUIRE(rt.error().empty());
 }
 void delayed_se_dispatch_survives_restore() {
     const auto p = project({cmd(140, {33554464, 2, 0, 0, 100, 100}, 0, {"SE/test.ogg"}), cmd(180, {50})});
@@ -911,6 +953,8 @@ int main() {
         picture_effects_are_separate_from_query_values(); ranged_move_includes_existing_ids_when_first_is_missing();
         basic_and_mouse_input_permissions();
         automatic_basic_input_is_deferred_and_restored(); choice_mouse_selects_clicked_row_and_rejects_outside_click();
+        opening_press_and_deferred_confirm_cannot_accept_choice(); mouse_query_distinguishes_new_held_and_released();
+        unrecognized_message_escapes_are_literal_text();
         delayed_se_dispatch_survives_restore();
         music_stop_preserves_kind_and_fade_duration();
         zero_sound_frequency_matches_windows_default();
@@ -938,6 +982,6 @@ int main() {
         choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click(); entirely_empty_choice_skips_all_of_its_branches();
         sound_preload_and_release_do_not_start_playback_or_change_music_state(); se_stop_cancels_reserved_sounds_only_on_its_channel();
         sound_database_variable_resolves_original_track_metadata();
-        std::cout << "74 native runtime tests passed\n"; return 0;
+        std::cout << "77 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }
