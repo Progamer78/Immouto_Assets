@@ -1,6 +1,16 @@
-# Native port status — 2026-11-10
+# Native port status — 2026-11-11
 
 **In progress. The full IPA runs on the user's iPhone, with gameplay and interface defects still being fixed. The complete game is unfinished.**
+
+## Performance and exact battle-log follow-up
+
+The user reported approximately 6-7 FPS on an iPhone 15 Pro Max. The old home loop repeatedly resolved paths, checked mod/save files and read fixed title text. Caching before filesystem access reduces the locally measured home/interaction game-loop work from 18-22 ms to 2.6-2.7 ms (about 7-8 times faster). A local timed frontend run with the monitor enabled averaged 59.4 FPS. The user's build 12 screenshot shows 60 FPS, 5.3 ms CPU work and 4.2 ms game work; it was captured during a compatibility stop, so this is not a sustained whole-game device benchmark.
+
+Trackpad input retains fractional touch positions, moves without a dead zone and composites the actual hover cursor at display resolution. Rendering uses anchored 60 Hz deadlines; menu/background time no longer causes catch-up bursts. Audio avoids redundant device locks, shares decoded effects and completes their decoding asynchronously. Image/font reads use bulk I/O; ARM64 JPEG decoding enables NEON. Colour scaling uses lookup tables with identical output (1.9 times faster in the local full-screen test). A 192 MiB estimated texture budget retains visible textures, evicts older ones and responds to low-memory events. Save previews invalidate only affected textures, avoiding a full scene reload. Menu now has a persisted Show FPS monitor option.
+
+Build 12 implemented clear-picture-effects but did not fix the actual battle stop. The supplied log identifies command 290 `[16,1,3090,3090,0,0,0]`, map 1/event 8/page 0, offset 217884. Build 13 adds timed colour correction and fading flashes, including effect clearing, Show persistence and save/load clock shifts. The exact command passes a rendered native fixture. Nine Windows/native RGB samples differ by at most two channel values; small intermediate rounding differences remain. A complete Day 4 battle still needs the user's save/device confirmation.
+
+There are 83 passing Release runtime scenarios in both Windows builds, SDL renderer/input/cache/pacing checks, an actual audio PCM callback test and 14 Python tests. Four original bedroom menu continuations still pass. The [build 13 IPA](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-13-1) is 1,031,845 bytes, built in 43 seconds and passed downloaded digest/ZIP/ARM64 checks. All four CI jobs pass. Source: `dc2dc90`; [source CI](https://github.com/Progamer78/Immouto_Assets/actions/runs/42983738581). Install over the existing app with the same signing settings. See [performance measurements](reports/performance_battle_validation.json) and [exact-log follow-up](reports/stutter_battle_followup_validation.json). Initial resource creation can still cause a short hitch; this is not a zero-stutter or full-game completion claim.
 
 ## Bedroom submenu fidelity and mouse mode
 

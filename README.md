@@ -4,7 +4,7 @@ Work in progress: this is the native runtime project for the game specified in [
 
 The supplied game files remain in their original directory. Git excludes the original game, generated game data, private asset archives, build outputs and signing material.
 
-For the IPA download and Windows signing steps, see [Install on iPhone](docs/IPHONE_INSTALL.md).
+For the IPA download and Windows signing steps, see [Install on iPhone](docs/IPHONE_INSTALL.md). The latest [build 13 update](https://github.com/Progamer78/Immouto_Assets/releases/tag/ios-build-13-1) adds performance and trackpad improvements, an optional FPS monitor, and fixes the timed battle colour command identified in the supplied error log. Install the small IPA over the existing app to preserve its assets and saves.
 
 ## Windows development
 
