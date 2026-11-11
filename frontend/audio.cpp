@@ -49,6 +49,7 @@ struct Audio::Impl {
     ma_engine engine{};
     SDL_AudioDeviceID device = 0;
     std::vector<std::unique_ptr<Voice>> voices;
+    std::vector<std::unique_ptr<Voice>> preloaded;
     static void callback(void* data, Uint8* output, int bytes) {
         auto& self = *static_cast<Impl*>(data);
         if (ma_engine_read_pcm_frames(&self.engine, output, bytes / (sizeof(float) * 2), nullptr) != MA_SUCCESS)
@@ -65,7 +66,7 @@ struct Audio::Impl {
         if (!device) { ma_engine_uninit(&engine); throw std::runtime_error(SDL_GetError()); }
         SDL_PauseAudioDevice(device, 0);
     }
-    ~Impl() { SDL_CloseAudioDevice(device); voices.clear(); ma_engine_uninit(&engine); }
+    ~Impl() { SDL_CloseAudioDevice(device); voices.clear(); preloaded.clear(); ma_engine_uninit(&engine); }
 };
 
 Audio::Audio(const std::filesystem::path& root) : impl_(std::make_unique<Impl>(root)) {}
@@ -83,6 +84,7 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
         if (event.at("operation") == "stop") {
             voices.erase(std::remove_if(voices.begin(), voices.end(), [&](const auto& voice) {
                 if (voice->kind != kind) return false;
+                if (kind == 2 && event.at("channel") != -1 && voice->channel != event.at("channel")) return false;
                 if (fade_ms == 0) return true;
                 voice->retiring = true;
                 ma_sound_set_fade_in_milliseconds(&voice->sound, -1, 0, fade_ms);
@@ -91,8 +93,23 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
             }), voices.end());
             continue;
         }
-        if (event.at("operation") != "play") throw std::runtime_error("Unsupported native audio event");
         const auto path = impl_->resources.path("Data/" + event.at("file").get<std::string>());
+        auto& preloaded = impl_->preloaded;
+        if (event.at("operation") == "release_unused") {
+            preloaded.erase(std::remove_if(preloaded.begin(), preloaded.end(), [&](const auto& voice) {
+                return voice->kind == kind && (event.at("file") == "" || voice->file == path.u8string());
+            }), preloaded.end());
+            continue;
+        }
+        if (event.at("operation") == "preload") {
+            const auto existing = std::find_if(preloaded.begin(), preloaded.end(), [&](const auto& voice) { return voice->kind == kind && voice->file == path.u8string(); });
+            if (existing == preloaded.end()) {
+                if (preloaded.size() == 16) preloaded.erase(preloaded.begin());
+                preloaded.push_back(std::make_unique<Impl::Voice>(&impl_->engine, path, event.at("channel"), kind));
+            }
+            continue;
+        }
+        if (event.at("operation") != "play") throw std::runtime_error("Unsupported native audio event");
         const int channel = event.at("channel");
         if (kind != 2) {
             const auto same = std::find_if(voices.begin(), voices.end(), [&](const auto& voice) {
@@ -113,7 +130,10 @@ void Audio::process(const wolf::Json& events, const std::array<int, 3>& volumes)
             ma_sound_set_stop_time_in_milliseconds(&voice->sound, ma_engine_get_time_in_milliseconds(&impl_->engine) + fade_ms);
             return false;
         }), voices.end());
-        auto voice = std::make_unique<Impl::Voice>(&impl_->engine, path, channel, kind);
+        std::unique_ptr<Impl::Voice> voice;
+        const auto cached = std::find_if(preloaded.begin(), preloaded.end(), [&](const auto& value) { return value->kind == kind && value->file == path.u8string(); });
+        if (cached == preloaded.end()) voice = std::make_unique<Impl::Voice>(&impl_->engine, path, channel, kind);
+        else { voice = std::move(*cached); preloaded.erase(cached); voice->channel = channel; }
         voice->volume = event.at("volume").get<float>() / 100.f;
         ma_sound_set_volume(&voice->sound, voice->volume * std::max(0, volumes.at(kind)) / 100.f);
         ma_sound_set_pitch(&voice->sound, event.at("tempo").get<float>() / 100.f);

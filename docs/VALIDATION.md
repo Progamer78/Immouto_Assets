@@ -103,3 +103,12 @@ The [bedtime replay](../tests/replays/bedtime.json) and [Bath replay](../tests/r
 The isolated Windows/native rotation-and-mirroring fixture matches all 589824 pixels. Both axes remain effective during rotation in the supplied 3.191 executable, despite the current official help's warning about separate-axis scaling. Relative delayed Show uses the live position at activation, confirmed by three reference rectangles. SDL readback checks cover all four flip combinations at zero and 90 degrees. See [metadata](../reports/picture_transform_validation.json) for hashes and limits. Assets and screenshots remain outside Git.
 
 The [morning shop replay](../tests/replays/morning-shop.json) continues from 18050, selects Help at the shop, and passes every native tick through 20250. It completes the shift at Day 2 17:00, with AP 35/60 and money 3358. All four source CI jobs pass for ad7d43e, and the build 8 IPA is verified locally.
+
+
+## Third feedback: floating controls, choices and audio
+
+The [bath Cancel](../tests/replays/bath-cancel.json) and [interaction Cancel](../tests/replays/night-cancel.json) native replays map basic Cancel to the mouse right-click expected by custom menus. Both finish with no choice active and retain Day 1 18:30. The bath menu's three visible rows correspond to original indices 0, 1 and 3. Empty rows are hidden without changing branch numbering; all-empty choices skip their branches.
+
+The [Day 2 return-home replay](../tests/replays/day2-return-home.json) resumes the prior successful shop state at 20250 and runs 2600 native ticks to 22850, Day 2 18:30. A separate synthetic native fixture executes common 305's original release/preload/play/SE-stop commands using its supplied MP3; the audio backend completes without errors. Core tests also verify channel-selective reserved-SE cancellation and database track metadata.
+
+The floating control toggle is 44 window points, with an 8-point drag threshold. Tests cover tap-versus-drag behavior, safe-area clamping, Cancel edge generation and enlarged aspect-preserving presentation when controls are hidden. The toggle's position and visibility persist in controls.json. Actual phone touch remains a separate validation step. See reports/controls_audio_validation.json.

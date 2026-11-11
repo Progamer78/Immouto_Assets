@@ -2,6 +2,14 @@
 
 **In progress. The full IPA runs on the user's iPhone, with gameplay and interface defects still being fixed. The complete game is unfinished.**
 
+## Movable controls, selection/cancel input and audio work
+
+The user confirmed build 8 runs, then reported bath-selection spacing, missing Cancel behavior, smaller presentation and a return-home sound stop. Empty choice strings now hide their rows and preserve original branch indices; an entirely empty choice skips its branches, matching the official command documentation. Mouse right-click and basic Cancel both cancel an allowed built-in choice. The frontend Cancel button also supplies a right-click to custom menus, including when basic keyboard input is disabled. Input edges remain pending until a simulation tick consumes them.
+
+At the user's request, a draggable three-dot button shows/hides the bottom controls. Controls start hidden, allowing a larger game picture while retaining its original aspect ratio. The toggle remains within the safe area; its position and visibility persist independently of game saves. Menu remains accessible by showing the controls first.
+
+Sound support now includes preload/release operations, channel-aware SE stops and cancellation of delayed SE, plus system-database track selection. The native original release/preload/play/stop fixture passes. The native return-home continuation runs 2600 ticks through frame 22850 at Day 2 18:30. Bath choice cancellation and custom interaction cancellation return without advancing the clock. There are 74 passing Release runtime scenarios, SDL input/layout/pixel checks and 14 Python tests. See [validation metadata](reports/controls_audio_validation.json). New iPhone behavior still requires device confirmation.
+
 ## Second iPhone feedback and continued progression
 
 The user confirmed that build 7 fixed the previous issues, then reported unsupported picture transforms during a natural Day 2 event and flipped-picture rendering near the bedtime/bath menu. Relative Show commands now use the previous picture position, including delayed activation. The renderer supports horizontal/vertical mirroring for images, text, generated shapes and window skins. Rotation uses the scaled rectangle center for every anchor and retains both scale axes, matching this supplied Windows executable. Mirrored, unrotated picture hit queries also work.
@@ -79,7 +87,7 @@ Every unsupported command/layout stops and records its context and event stack. 
 ## Verification and current incompatibility
 
 - Python tests: **14 passing**, including authoritative archived-game structure, archive priority/cache integrity and malformed-data/build-helper checks.
-- Native runtime: **69 passing scenarios** in the local Release build (68 passed in Debug before the debug-output addition). New cases include native save/load, saved database reads, music resume metadata, inline/optional sound fields, screenshot scheduling and Return to Title resetting live state while retaining saved settings. SDL tests cover JPEG/PNG previews and overlapping short window borders.
+- Native runtime: **74 passing scenarios** in the local Release build (68 passed in Debug before the debug-output addition). New cases include native save/load, saved database reads, music resume metadata, inline/optional sound fields, screenshot scheduling and Return to Title resetting live state while retaining saved settings. SDL tests cover JPEG/PNG previews and overlapping short window borders.
 - Windows native application and headless runtime compile using a workspace-local Zig/CMake/Ninja toolchain.
 - GitHub workflow syntax checked with checksum-verified actionlint 1.7.7.
 - First remote [native check run](https://github.com/Progamer78/Immouto_Assets/actions/runs/42585759780) passed: Windows, Linux and macOS core tests, plus macOS SDL frontend compilation. It completed in approximately 65 seconds including runner setup.

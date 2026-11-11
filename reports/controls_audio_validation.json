@@ -1,0 +1,107 @@
+{
+  "date": "2026-11-10",
+  "scope": "Third iPhone feedback and requested movable control toggle",
+  "local_checks": {
+    "runtime_scenarios": 74,
+    "configuration": "Release",
+    "sdl_pixel_input_layout_tests": "pass",
+    "python_tests": 14,
+    "workflow_lint": "pass"
+  },
+  "controls": {
+    "toggle": "Tap floating three-dot button to show/hide bottom controls; drag to reposition",
+    "default": "hidden",
+    "settings": "controls.json stores visibility and normalized safe-area position",
+    "target_points": 44,
+    "drag_threshold_points": 8,
+    "safe_area_test_output": [
+      2796,
+      1290
+    ],
+    "safe_area_insets": [
+      132,
+      0,
+      132,
+      63
+    ],
+    "hidden_game_height": 1227,
+    "shown_game_height": 1077.3658536585365,
+    "aspect_ratio_preserved": true,
+    "cancel": "Keyboard/controller/on-screen Cancel also emits a right-click; edge occurs once per press"
+  },
+  "choices": {
+    "blank_options": "Hidden and skipped in navigation; original branch indices retained",
+    "all_blank": "Whole choice is skipped",
+    "bath_visible_rows": [
+      0,
+      1,
+      3
+    ],
+    "primary_reference": "https://silversecond.com/WolfRPGEditor/Help/04ev_select.html"
+  },
+  "audio": {
+    "new_operations": [
+      "preload",
+      "release unused",
+      "SE stop by channel",
+      "variable/direct database track selection"
+    ],
+    "native_fixture": "Original common-305 release/preload/play/SE-stop sequence decodes without a frontend error",
+    "reserved_sounds": "SE Stop cancels scheduled sounds on the selected channel; -1 clears all channels",
+    "preload_cache_limit": 16,
+    "primary_reference": "https://silversecond.com/WolfRPGEditor/Help/04ev_sound.html"
+  },
+  "limits": [
+    "New toggle placement and touch behavior require phone verification",
+    "Original story events can disallow cancellation; no forced story skipping added",
+    "Whole-game compatibility remains incomplete"
+  ],
+  "bath-visible": {
+    "frame": 13550,
+    "error": "",
+    "capture_sha256": "a08c2693258561bd0682c04bd6164962337573cb67309385ae6e30b056ed7167",
+    "choice_active": true,
+    "hud": {
+      "6200": "\\f[20]18:30",
+      "6211": "\\f[14]Day 1\\f[14]",
+      "6235": "\\f[12] 60/60",
+      "6251": "\\f[20] 3108 \\f[14]G"
+    }
+  },
+  "bath-cancel": {
+    "frame": 14000,
+    "error": "",
+    "capture_sha256": "44256b27d95c54d59e6f5440e16d7be3e679d830463c613dc8c7bb416408e9fd",
+    "choice_active": false,
+    "hud": {
+      "6200": "\\f[20]18:30",
+      "6211": "\\f[14]Day 1\\f[14]",
+      "6235": "\\f[12] 60/60",
+      "6251": "\\f[20] 3108 \\f[14]G"
+    }
+  },
+  "night-cancel": {
+    "frame": 14000,
+    "error": "",
+    "capture_sha256": "9b345365da48c9c13de5c28090c24ae80aaef1293f37f8dffd5ca1537f76d2dc",
+    "choice_active": false,
+    "hud": {
+      "6200": "\\f[20]18:30",
+      "6211": "\\f[14]Day 1\\f[14]",
+      "6235": "\\f[12] 60/60",
+      "6251": "\\f[20] 3108 \\f[14]G"
+    }
+  },
+  "day2-home": {
+    "frame": 22850,
+    "error": "",
+    "capture_sha256": "9b2a541b4e05252503de370ce9040f9058d6dba3ad6c220e5985badafe6922f9",
+    "choice_active": false,
+    "hud": {
+      "6200": "\\f[20]18:30",
+      "6211": "\\f[14]Day 2\\f[14]",
+      "6235": "\\f[12] 45/60",
+      "6251": "\\f[20] 3258 \\f[14]G"
+    }
+  }
+}

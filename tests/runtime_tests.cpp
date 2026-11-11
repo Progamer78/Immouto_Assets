@@ -828,6 +828,53 @@ void debug_output_is_nonblocking_bounded_and_separate_from_game_messages() {
     REQUIRE(rt.number(2000002) == 88); REQUIRE(rt.diagnostics().at("debug_text").empty());
     REQUIRE(rt.message() == "Game message"); REQUIRE(rt.number(9000012) == 1);
 }
+void choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click() {
+    const auto p = project({cmd(102, {4}, 0, {"First", "Second", "", "Back"}),
+        cmd(401, {2}), cmd(121, {2000001, 11, 0, 0}, 1), cmd(401, {3}), cmd(121, {2000001, 22, 0, 0}, 1),
+        cmd(401, {4}), cmd(121, {2000001, 33, 0, 0}, 1), cmd(401, {5}), cmd(121, {2000001, 44, 0, 0}, 1),
+        cmd(421), cmd(121, {2000001, 99, 0, 0}, 1), cmd(499)});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); wolf::Input down; down.down = true;
+    rt.tick(down); REQUIRE(rt.number(9000020) == 1); rt.tick(); rt.tick(down); REQUIRE(rt.number(9000020) == 3);
+    wolf::Input confirm; confirm.confirm = true; rt.tick(confirm); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.number(2000001) == 44);
+    wolf::Runtime cancelled(p); cancelled.start_common(0); cancelled.tick(); wolf::Input right; right.mouse_right_new = true;
+    cancelled.tick(right); cancelled.tick(); REQUIRE(cancelled.error().empty()); REQUIRE(cancelled.number(2000001) == 99);
+}
+void entirely_empty_choice_skips_all_of_its_branches() {
+    wolf::Runtime rt(project({cmd(102, {2}, 0, {"", "\\s[0]"}), cmd(401, {2}), cmd(121, {2000001, 99, 0, 0}, 1),
+        cmd(401, {3}), cmd(121, {2000001, 88, 0, 0}, 1), cmd(499), cmd(121, {2000002, 77, 0, 0})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); REQUIRE(rt.choice().empty());
+    REQUIRE(rt.number(2000001) == 0); REQUIRE(rt.number(2000002) == 77);
+}
+void sound_preload_and_release_do_not_start_playback_or_change_music_state() {
+    wolf::Runtime rt(project({cmd(140, {33554467, 0, 0, 0, 70, 100}, 0, {"SE/test.wav"}),
+        cmd(140, {33554465, 0, 0, 0, 70, 100}, 0, {"SE/test.wav"})}));
+    rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); const auto audio = rt.take_audio();
+    REQUIRE(audio.size() == 2); REQUIRE(audio.at(0).at("operation") == "release_unused");
+    REQUIRE(audio.at(1).at("operation") == "preload"); REQUIRE(rt.snapshot().at("music").empty());
+}
+void se_stop_cancels_reserved_sounds_only_on_its_channel() {
+    for (const bool extended : {false, true}) {
+        Json args = {-224, 0, 0, 7}; if (extended) { args.push_back(0); args.push_back(0); args.push_back(0); }
+        const auto p = project({cmd(140, {33554464, 5, 0, 7, 80, 100}, 0, {"SE/a.wav"}),
+            cmd(140, {33554464, 5, 0, 8, 80, 100}, 0, {"SE/b.wav"}), cmd(140, args), cmd(180, {99})});
+        wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty());
+        const auto audio = rt.take_audio(); REQUIRE(audio.size() == 1); REQUIRE(audio.at(0).at("channel") == 7);
+        REQUIRE(rt.snapshot().at("pending_audio").size() == 1);
+        wolf::Runtime loaded(p); loaded.restore(rt.snapshot());
+        for (int i = 0; i < 5; ++i) loaded.tick();
+        const auto later = loaded.take_audio(); REQUIRE(later.size() == 1); REQUIRE(later.at(0).at("channel") == 8);
+    }
+}
+void sound_database_variable_resolves_original_track_metadata() {
+    auto p = project({cmd(121, {2000001, 1, 0, 0}), cmd(140, {16777216, 6, 2000001, 123}), cmd(180, {1}),
+        cmd(121, {2000001, 0, 0, 0}), cmd(140, {16777216, 6, 2000001, 0})});
+    p["databases"]["system"]["types"][1]["rows"] = Json::array({Json::array({"",0,0,0}),Json::array({"BGM/a.ogg",60,0,500})});
+    wolf::Runtime rt(p); rt.start_common(0); rt.tick(); REQUIRE(rt.error().empty()); const auto audio = rt.take_audio();
+    REQUIRE(audio.size() == 1); REQUIRE(audio.at(0).at("file") == "BGM/a.ogg"); REQUIRE(audio.at(0).at("volume") == 60);
+    REQUIRE(audio.at(0).at("tempo") == 100); REQUIRE(audio.at(0).at("start_ms") == 123); REQUIRE(audio.at(0).at("loop_ms") == 500);
+    rt.tick(); const auto stopped = rt.take_audio(); REQUIRE(stopped.size() == 1); REQUIRE(stopped.at(0).at("operation") == "stop");
+    REQUIRE(rt.snapshot().at("music").empty());
+}
 void game_clock_is_writable_and_survives_restore() {
     const auto p = project({cmd(180, {100})}); wolf::Runtime rt(p);
     rt.set_number(9000028, 9999999); rt.set_number(9000029, 7); rt.start_common(0); rt.tick();
@@ -888,6 +935,9 @@ int main() {
         relative_picture_show_uses_live_position_after_delay();
         signed_picture_areas_match_reference_anchors_and_allow_hit_queries();
         debug_output_is_nonblocking_bounded_and_separate_from_game_messages();
-        std::cout << "69 native runtime tests passed\n"; return 0;
+        choices_hide_blank_rows_preserve_branch_indices_and_accept_right_click(); entirely_empty_choice_skips_all_of_its_branches();
+        sound_preload_and_release_do_not_start_playback_or_change_music_state(); se_stop_cancels_reserved_sounds_only_on_its_channel();
+        sound_database_variable_resolves_original_track_metadata();
+        std::cout << "74 native runtime tests passed\n"; return 0;
     } catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

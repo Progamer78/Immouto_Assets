@@ -741,8 +741,20 @@ void Runtime::show_choice(Run& run, const Json& cmd) {
         Json strings = Json::array();
         for (const auto& text : cmd.at("strings")) strings.push_back(expand(text, frame.context));
         for (std::size_t i = 0; i < strings.size() && i < 10; ++i) set_text(9900040 + static_cast<int>(i), strings.at(i));
+        std::vector<int> visible;
+        for (int i = 0; i < count; ++i) if (!strings.at(i).get_ref<const std::string&>().empty()) visible.push_back(i);
+        if (visible.empty()) {
+            const auto& list = commands(frame.context);
+            while (frame.pc < list.size()) {
+                const auto& row = list.at(frame.pc++);
+                if (row.at("indent") == cmd.at("indent") && row.at("code") == 499) return;
+            }
+            fail("Empty choice has no matching end");
+        }
+        int selected = std::clamp(number(9000007), 0, count - 1);
+        if (std::find(visible.begin(), visible.end(), selected) == visible.end()) selected = visible.front();
         choice_ = {{"owner", run.owner}, {"pc", frame.pc - 1}, {"common", frame.context.common},
-            {"strings", strings}, {"selected", std::clamp(number(9000007), 0, count - 1)}, {"cancel", cancel},
+            {"strings", strings}, {"selected", selected}, {"cancel", cancel},
             {"opened", frame_}, {"repeat", 0}, {"done", false}, {"x", number(9000003)}, {"y", number(9000004)}};
         set_number(9000020, choice_.at("selected"));
         prepare_choice_layout();
@@ -791,12 +803,17 @@ void Runtime::transfer(const Json& cmd, Context context) {
 void Runtime::advance_choice() {
     if (choice_.empty() || choice_.at("done") == true || choice_.at("opened").get<std::uint64_t>() == frame_) return;
     const int count = static_cast<int>(choice_.at("strings").size());
+    std::vector<int> visible;
+    for (int i = 0; i < count; ++i) if (!choice_.at("strings").at(i).get_ref<const std::string&>().empty()) visible.push_back(i);
+    if (visible.empty()) fail("Active choice has no visible entries");
     int selected = std::clamp(number(9000020), 0, count - 1);
+    if (std::find(visible.begin(), visible.end(), selected) == visible.end()) selected = visible.front();
     int direction = input_.up ? -1 : input_.down ? 1 : 0;
     const bool new_direction = (input_.up && !previous_input_.up) || (input_.down && !previous_input_.down);
     if (input_.wheel) { direction = input_.wheel > 0 ? -1 : 1; choice_["repeat"] = frame_; }
     if (direction && (new_direction || frame_ >= choice_.at("repeat").get<std::uint64_t>())) {
-        selected = (selected + direction + count) % count;
+        const int position = static_cast<int>(std::find(visible.begin(), visible.end(), selected) - visible.begin());
+        selected = visible.at((position + direction + static_cast<int>(visible.size())) % visible.size());
         choice_sound(9000018);
         choice_["repeat"] = frame_ + std::max(1, number(new_direction ? 9000015 : 9000016));
     }
@@ -810,14 +827,18 @@ void Runtime::advance_choice() {
             for (std::size_t i = 0; i < layout.at("rows").size(); ++i) {
                 const auto& row = layout.at("rows").at(i);
                 const int y = top + row.at("top").get<int>();
-                if (input_.mouse_y >= y && input_.mouse_y < y + row.at("height").get<int>()) { selected = static_cast<int>(i); hit = true; break; }
+                if (input_.mouse_y >= y && input_.mouse_y < y + row.at("height").get<int>()) {
+                    const int index = row.value("index", static_cast<int>(i));
+                    if (!choice_.at("strings").at(index).get_ref<const std::string&>().empty()) { selected = index; hit = true; }
+                    break;
+                }
             }
         }
         if (input_.mouse_left_new && !hit && !keyboard_confirm) done = false;
     }
     if (done) choice_sound(9000017);
     const int cancel = choice_.at("cancel");
-    if (input_.cancel && !previous_input_.cancel && cancel != 1) {
+    if (((input_.cancel && !previous_input_.cancel) || input_.mouse_right_new) && cancel != 1) {
         selected = cancel == 0 ? -2 : cancel - 2; done = true; choice_sound(9000019);
     }
     choice_["selected"] = selected; choice_["done"] = done; set_number(9000020, selected);
@@ -1034,23 +1055,53 @@ void Runtime::execute(Run& run, const Json& cmd) {
     }
     case 122: string_operation(cmd, context); return;
     case 140: {
-        const int kind = (arg(cmd, 0) >> 4) & 15;
+        const int header = arg(cmd, 0), kind = (header >> 4) & 15, process = header & 15;
+        const auto count = cmd.at("args").size();
+        auto stop = [&](int channel, int fade) {
+            if (kind == 2) for (auto it = pending_audio_.begin(); it != pending_audio_.end();) {
+                const auto& event = it->at("event");
+                if (event.at("kind") == 2 && (channel == -1 || event.at("channel") == channel)) it = pending_audio_.erase(it);
+                else ++it;
+            }
+            audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", channel}, {"fade_ms", fade}});
+            if (kind < 2) music_.erase(std::to_string(kind));
+        };
         // Older game data also sign-extends the -1 database stop sentinel.
-        if (kind <= 1 && (arg(cmd, 0) == (0x00ffff00 | (kind << 4)) || arg(cmd, 0) == (-256 | (kind << 4)))) {
-            if (cmd.at("args").size() != 4 || !cmd.at("strings").empty() || value(2) != 0 || value(3) != 0)
-                fail("Unsupported music-stop layout");
-            audio_.push_back({{"operation", "stop"}, {"kind", kind}, {"channel", -1},
-                {"fade_ms", std::max(0, value(1)) * 1000 / project_->at("game").at("fps").get<int>()}});
-            music_.erase(std::to_string(kind));
+        if (kind <= 2 && (header == (0x00ffff00 | (kind << 4)) || header == (-256 | (kind << 4)))) {
+            if ((count != 4 && !(kind == 2 && count == 7)) || !cmd.at("strings").empty() || value(2) != 0 ||
+                (kind < 2 && value(3) != 0) || (count == 7 && (arg(cmd, 4) || arg(cmd, 5) || arg(cmd, 6))))
+                fail("Unsupported sound-stop layout");
+            stop(kind == 2 ? value(3) : -1, kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_->at("game").at("fps").get<int>());
             return;
         }
-        const auto count = cmd.at("args").size();
-        const bool extended_se = kind == 2 && count == 7 && arg(cmd, 6) == 0;
-        if (kind > 2 || arg(cmd, 0) != (0x02000000 | (kind << 4)) ||
-            (count != (kind == 2 ? 6u : 7u) && !extended_se) || cmd.at("strings").size() != 1 || value(2) != 0)
-            fail("Unsupported sound-command layout (filename playback only)");
-        auto file = expand(cmd.at("strings").at(0), context);
-        int volume = value(4), frequency = value(5), loop = kind == 2 ? 0 : value(6);
+        if (kind > 2 || (process != 0 && process != 1 && process != 3)) fail("Unsupported sound operation");
+        const bool filename = (header & 0xff000000) == 0x02000000;
+        std::string file; int volume = 100, frequency = 100, loop = 0;
+        if (filename) {
+            const bool extended_se = kind == 2 && count == 7 && arg(cmd, 6) == 0;
+            if (header != (0x02000000 | (kind << 4) | process) ||
+                (count != (kind == 2 ? 6u : 7u) && !extended_se) || cmd.at("strings").size() != 1 || value(2) != 0)
+                fail("Unsupported filename sound-command layout");
+            file = expand(cmd.at("strings").at(0), context);
+            volume = value(4); frequency = value(5); loop = kind == 2 ? 0 : value(6);
+        } else {
+            const bool variable = header == (0x01000000 | (kind << 4));
+            const bool direct = (header & 0xff00000f) == 0;
+            if ((!variable && !direct) || count != 4 || !cmd.at("strings").empty()) fail("Unsupported database sound-command layout");
+            int entry = variable ? value(2) : (header >> 8) & 65535;
+            if (!variable && entry >= 32768) entry -= 65536;
+            if (entry == -1) { stop(kind == 2 ? value(3) : -1, kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_->at("game").at("fps").get<int>()); return; }
+            const auto& rows = databases_.at("system").at("types").at(1 + kind).at("rows");
+            if (entry < 0 || entry >= static_cast<int>(rows.size())) fail("Missing sound database entry");
+            const auto& row = rows.at(entry);
+            file = expand(row.at(0), context); volume = row.at(1); frequency = row.at(2);
+            if (volume == 0) volume = 100;
+            if (row.size() > 3) loop = row.at(3);
+        }
+        if (file.empty() && process != 3) {
+            if (process == 0 && kind < 2) stop(-1, std::max(0, value(1)) * 1000 / project_->at("game").at("fps").get<int>());
+            return;
+        }
         if (file.find_first_of("\r\n") != std::string::npos) {
             std::istringstream stream(file); std::vector<std::string> lines; std::string line;
             while (std::getline(stream, line)) { if (!line.empty() && line.back() == '\r') line.pop_back(); lines.push_back(line); }
@@ -1065,15 +1116,15 @@ void Runtime::execute(Run& run, const Json& cmd) {
         }
         if (frequency < 0) fail("Negative sound frequency is not supported");
         if (frequency == 0) frequency = 100;
-        const Json event = {{"operation", "play"}, {"kind", kind}, {"file", file},
+        const Json event = {{"operation", process == 1 ? "preload" : process == 3 ? "release_unused" : "play"}, {"kind", kind}, {"file", file},
             {"channel", kind == 2 ? value(3) : 0}, {"volume", volume}, {"tempo", frequency},
             {"start_ms", kind == 2 ? 0 : std::max(0, value(3))}, {"loop_ms", loop},
             {"fade_ms", kind == 2 ? 0 : std::max(0, value(1)) * 1000 / project_->at("game").at("fps").get<int>()}};
-        const int delay = kind == 2 ? std::max(0, value(1)) : 0;
+        const int delay = kind == 2 && process == 0 ? std::max(0, value(1)) : 0;
         if (delay) pending_audio_.push_back({{"start", frame_ + delay}, {"event", event}});
         else audio_.push_back(event);
-        if (kind < 2) remember_music(event);
-        if (kind < 2) { set_number(9000095 + kind * 2, volume); set_number(9000096 + kind * 2, frequency); }
+        if (kind < 2 && process == 0) remember_music(event);
+        if (kind < 2 && process == 0) { set_number(9000095 + kind * 2, volume); set_number(9000096 + kind * 2, frequency); }
         return;
     }
     case 123: {

@@ -3,6 +3,7 @@
 #include "presentation.hpp"
 #include "picture_render.hpp"
 #include "picture_geometry.hpp"
+#include "controls.hpp"
 #include <stb/stb_image.h>
 #include <chrono>
 #include <fstream>
@@ -39,6 +40,19 @@ int main() {
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* target = nullptr;
     try {
+        const auto hidden = presentation::layout(2796, 1290, 1024, 576, {132,0,132,63}, false);
+        const auto shown = presentation::layout(2796, 1290, 1024, 576, {132,0,132,63}, true);
+        if (hidden.game.h <= shown.game.h || hidden.game.y + hidden.game.h > 1227.01f || hidden.controls.h != 0 ||
+            std::abs(hidden.game.w / hidden.game.h - 1024.f / 576) > 0.001f) throw std::runtime_error("Hidden controls must enlarge the game without stretching or entering the home area");
+        presentation::FloatingToggle toggle;
+        auto dot = toggle.bounds(hidden.safe, 132);
+        if (!toggle.press(hidden.safe, 132, dot.x + 20, dot.y + 20) || !toggle.release()) throw std::runtime_error("Three-dot tap did not toggle controls");
+        if (!toggle.press(hidden.safe, 132, dot.x + 20, dot.y + 20)) throw std::runtime_error("Three-dot drag did not capture the pointer");
+        toggle.move(hidden.safe, 132, -500, 5000, 24); dot = toggle.bounds(hidden.safe, 132);
+        if (toggle.release() || dot.x < hidden.safe.x || dot.y + dot.h > hidden.safe.y + hidden.safe.h) throw std::runtime_error("Dragging the toggle must clamp to the safe area without acting as a tap");
+        CancelButton cancel; wolf::Input pressed; pressed.cancel = true;
+        const auto first = cancel.map(pressed), held = cancel.map(pressed); cancel.map({}); const auto again = cancel.map(pressed);
+        if (!first.mouse_right_new || !first.mouse_right || held.mouse_right_new || !again.mouse_right_new) throw std::runtime_error("Cancel must act as one right-click edge per press");
         const auto safe = presentation::fit(2796, 1290, 1024, 656, {132, 0, 132, 63});
         if (safe.x < 132 || safe.x + safe.w > 2664 || safe.y < 0 || safe.y + safe.h > 1227.01f)
             throw std::runtime_error("iPhone presentation overlaps a notch or home gesture area");

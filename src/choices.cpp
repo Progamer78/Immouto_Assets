@@ -14,11 +14,13 @@ void Runtime::prepare_choice_layout() {
     const int gap = project_->at("game").at("flags").at(11);
     int width = 0, height = 0;
     Json rows = Json::array();
-    for (const auto& text : choice_.at("strings")) {
+    for (std::size_t i = 0; i < choice_.at("strings").size(); ++i) {
+        const auto& text = choice_.at("strings").at(i);
+        if (text.get_ref<const std::string&>().empty()) continue;
         const auto size = text_rasterizer_->measure(text, style);
         const int row_height = std::max(1, size.second);
         width = std::max(width, size.first);
-        rows.push_back({{"top", height}, {"height", row_height + gap}, {"content_height", row_height}}); height += row_height + gap;
+        rows.push_back({{"index", i}, {"top", height}, {"height", row_height + gap}, {"content_height", row_height}}); height += row_height + gap;
     }
     width += pad_x * 2; height += pad_y * 2 - gap;
     const int center = choice_.at("x").get<int>() == -1 ? project_->at("game").at("width").get<int>() / 2 : choice_.at("x").get<int>();
@@ -42,15 +44,20 @@ Json Runtime::choice_pictures() const {
     };
     if (layout.at("show_window") == true && !layout.at("skin").get<std::string>().empty()) picture(0, 3, layout.at("skin"), x, y, width, height);
     const int selected = choice_.at("selected");
-    if (selected >= 0 && selected < static_cast<int>(layout.at("rows").size()) && !layout.at("cursor").get<std::string>().empty()) {
-        const auto& row = layout.at("rows").at(selected);
+    const Json* selected_row = nullptr;
+    for (std::size_t i = 0; i < layout.at("rows").size(); ++i)
+        if (layout.at("rows").at(i).value("index", static_cast<int>(i)) == selected) selected_row = &layout.at("rows").at(i);
+    if (selected_row && !layout.at("cursor").get<std::string>().empty()) {
+        const auto& row = *selected_row;
         picture(1, 3, layout.at("cursor"), x + layout.at("pad_x").get<int>() - 4, y + layout.at("pad_y").get<int>() + row.at("top").get<int>() - 2,
             width - 2 * layout.at("pad_x").get<int>() + 8, row.at("content_height").get<int>() + 4);
         result["1"]["blend"] = layout.at("cursor_blend");
     }
-    for (std::size_t i = 0; i < choice_.at("strings").size(); ++i) {
-        picture(2 + static_cast<int>(i), 2, choice_.at("strings").at(i), x + layout.at("pad_x").get<int>(),
-            y + layout.at("pad_y").get<int>() + layout.at("rows").at(i).at("top").get<int>(), 1, 1);
+    for (std::size_t i = 0; i < layout.at("rows").size(); ++i) {
+        const auto& row = layout.at("rows").at(i);
+        const int index = row.value("index", static_cast<int>(i));
+        picture(2 + static_cast<int>(i), 2, choice_.at("strings").at(index), x + layout.at("pad_x").get<int>(),
+            y + layout.at("pad_y").get<int>() + row.at("top").get<int>(), 1, 1);
         result[std::to_string(2 + i)]["text_style"] = layout.at("style");
     }
     return result;

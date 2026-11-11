@@ -9,6 +9,7 @@
 #include "images.hpp"
 #include "window.hpp"
 #include "presentation.hpp"
+#include "controls.hpp"
 #include "picture_geometry.hpp"
 #include "picture_render.hpp"
 #include <SDL.h>
@@ -235,7 +236,7 @@ void draw_message(SDL_Renderer* renderer, Assets& assets, const Json& message, i
     if (SDL_RenderCopyF(renderer, texture.value, nullptr, &destination) != 0) throw std::runtime_error(SDL_GetError());
 }
 
-presentation::Rect display_area(SDL_Window* window, SDL_Renderer* renderer, int width, int height) {
+presentation::Layout display_area(SDL_Window* window, SDL_Renderer* renderer, int width, int height, bool controls_visible) {
     int output_w = 0, output_h = 0;
     if (SDL_GetRendererOutputSize(renderer, &output_w, &output_h) != 0 || output_w < 1 || output_h < 1)
         throw std::runtime_error("Cannot determine display dimensions");
@@ -247,7 +248,23 @@ presentation::Rect display_area(SDL_Window* window, SDL_Renderer* renderer, int 
 #else
     (void)window;
 #endif
-    return presentation::fit(output_w, output_h, width, height, insets);
+    return presentation::layout(output_w, output_h, width, height, insets, controls_visible);
+}
+void draw_controls_toggle(SDL_Renderer* renderer, presentation::Rect rect) {
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    auto circle = [&](float x, float y, float radius) {
+        for (int dy = -static_cast<int>(radius); dy <= static_cast<int>(radius); ++dy) {
+            const float span = std::sqrt(std::max(0.f, radius * radius - dy * dy));
+            SDL_RenderDrawLineF(renderer, x - span, y + dy, x + span, y + dy);
+        }
+    };
+    SDL_SetRenderDrawColor(renderer, 35, 35, 35, 220);
+    circle(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
+    SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
+    const float r = rect.w / 19;
+    for (int i = -1; i <= 1; ++i) {
+        circle(rect.x + rect.w / 2 + i * rect.w / 5, rect.y + rect.h / 2, r);
+    }
 }
 bool show_app_menu(SDL_Window* window) {
     const SDL_MessageBoxButtonData buttons[] = {{SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Keep playing"},
@@ -366,10 +383,26 @@ int main(int argc, char** argv) {
         bool running = true;
         double last = static_cast<double>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency(), accumulator = 0;
         wolf::Input input;
+        CancelButton cancel_button;
+        presentation::FloatingToggle controls_toggle;
+        bool controls_visible = false;
+        const auto controls_settings = storage / "controls.json";
+        if (fs::exists(controls_settings)) try {
+            const auto settings = wolf::load_json(controls_settings.u8string());
+            controls_visible = settings.value("visible", false);
+            controls_toggle.x = std::clamp(settings.value("x", 1.f), 0.f, 1.f);
+            controls_toggle.y = std::clamp(settings.value("y", 0.f), 0.f, 1.f);
+        } catch (...) { SDL_Log("Using default touch-control settings"); }
         bool compatibility_notice = false;
         while (running && !runtime.quit_requested()) {
-            input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
             bool keyboard_menu = false;
+            bool ui_mouse = controls_toggle.captured();
+            const auto event_display = display_area(window, renderer, width, height, controls_visible);
+            int event_window_w = 0, event_window_h = 0, event_output_w = 0, event_output_h = 0;
+            SDL_GetWindowSize(window, &event_window_w, &event_window_h); SDL_GetRendererOutputSize(renderer, &event_output_w, &event_output_h);
+            const float density = static_cast<float>(event_output_w) / std::max(1, event_window_w);
+            const float toggle_size = 44 * density;
+            auto pointer = [&](int x, int y) { return std::pair<float, float>{x * density, y * static_cast<float>(event_output_h) / std::max(1, event_window_h)}; };
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_QUIT) running = false;
@@ -382,8 +415,21 @@ int main(int argc, char** argv) {
                 if (event.type == SDL_APP_DIDENTERFOREGROUND ||
                     (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)) paused = false;
                 if (event.type == SDL_MOUSEBUTTONDOWN) {
-                    input.mouse_left_new |= event.button.button == SDL_BUTTON_LEFT;
+                    const auto [px, py] = pointer(event.button.x, event.button.y);
+                    const bool overlay = event.button.button == SDL_BUTTON_LEFT && controls_toggle.press(event_display.safe, toggle_size, px, py);
+                    ui_mouse |= overlay;
+                    input.mouse_left_new |= event.button.button == SDL_BUTTON_LEFT && !overlay;
                     input.mouse_right_new |= event.button.button == SDL_BUTTON_RIGHT;
+                }
+                if (event.type == SDL_MOUSEMOTION && controls_toggle.captured()) {
+                    const auto [px, py] = pointer(event.motion.x, event.motion.y);
+                    controls_toggle.move(event_display.safe, toggle_size, px, py, 8 * density); ui_mouse = true;
+                }
+                if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && controls_toggle.captured()) {
+                    if (controls_toggle.release()) controls_visible = !controls_visible;
+                    ui_mouse = true;
+                    try { wolf::atomic_save(controls_settings.u8string(), {{"visible", controls_visible}, {"x", controls_toggle.x}, {"y", controls_toggle.y}}); }
+                    catch (...) { SDL_Log("Could not save touch-control settings"); }
                 }
                 if (event.type == SDL_MOUSEWHEEL) input.wheel += event.wheel.y;
                 if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_F12 && !event.key.repeat) keyboard_menu = true;
@@ -395,17 +441,20 @@ int main(int argc, char** argv) {
                 }
             }
             const auto buttons = SDL_GetMouseState(&input.mouse_x, &input.mouse_y);
-            const auto display = display_area(window, renderer, width, screen_height);
+            const auto display = display_area(window, renderer, width, height, controls_visible);
             int window_w = 0, window_h = 0, output_w = 0, output_h = 0;
             SDL_GetWindowSize(window, &window_w, &window_h); SDL_GetRendererOutputSize(renderer, &output_w, &output_h);
-            input.mouse_x = presentation::coordinate(input.mouse_x * static_cast<float>(output_w) / std::max(1, window_w), display.x, display.w, width);
-            input.mouse_y = presentation::coordinate(input.mouse_y * static_cast<float>(output_h) / std::max(1, window_h), display.y, display.h, screen_height);
+            const float pointer_x = input.mouse_x * static_cast<float>(output_w) / std::max(1, window_w);
+            const float pointer_y = input.mouse_y * static_cast<float>(output_h) / std::max(1, window_h);
+            input.mouse_x = presentation::coordinate(pointer_x, display.game.x, display.game.w, width);
+            input.mouse_y = presentation::coordinate(pointer_y, display.game.y, display.game.h, height);
             input.mouse_left = (buttons & SDL_BUTTON_LMASK) != 0;
             input.mouse_right = (buttons & SDL_BUTTON_RMASK) != 0;
             input.mouse_middle = (buttons & SDL_BUTTON_MMASK) != 0;
             const auto* keys = SDL_GetKeyboardState(nullptr);
             auto pad = [&](SDL_GameControllerButton button) { return controller && SDL_GameControllerGetButton(controller, button); };
-            auto touch = [&](int index) { return input.mouse_left && presentation::button(input.mouse_x, input.mouse_y, index, width, height); };
+            auto touch = [&](int index) { return !ui_mouse && input.mouse_left && presentation::contains(display.controls, pointer_x, pointer_y) &&
+                pointer_x >= display.controls.x + index * display.controls.w / 8 && pointer_x < display.controls.x + (index + 1) * display.controls.w / 8; };
             const bool open_menu = (touch(7) && input.mouse_left_new) || keyboard_menu;
             input.left = keys[SDL_SCANCODE_LEFT] || pad(SDL_CONTROLLER_BUTTON_DPAD_LEFT) || touch(0);
             input.up = keys[SDL_SCANCODE_UP] || pad(SDL_CONTROLLER_BUTTON_DPAD_UP) || touch(1);
@@ -414,7 +463,7 @@ int main(int argc, char** argv) {
             input.confirm = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_Z] || pad(SDL_CONTROLLER_BUTTON_A) || touch(4);
             input.cancel = keys[SDL_SCANCODE_ESCAPE] || keys[SDL_SCANCODE_X] || pad(SDL_CONTROLLER_BUTTON_B) || touch(5);
             input.sub = keys[SDL_SCANCODE_LSHIFT] || pad(SDL_CONTROLLER_BUTTON_X) || touch(6);
-            if (input.mouse_x < 0 || input.mouse_x >= width || input.mouse_y < 0 || input.mouse_y >= height) {
+            if (ui_mouse || input.mouse_x < 0 || input.mouse_x >= width || input.mouse_y < 0 || input.mouse_y >= height) {
                 input.mouse_left = input.mouse_right = input.mouse_middle = false;
                 input.mouse_left_new = input.mouse_right_new = false;
                 input.mouse_x = input.mouse_y = -1;
@@ -432,7 +481,7 @@ int main(int argc, char** argv) {
             last = now;
             int steps = 0;
             while (runtime.error().empty() && accumulator >= 1.0 / fps && steps++ < 8) {
-                { std::lock_guard<std::mutex> lock(lifecycle.guard); runtime.tick(replay ? replay->input(runtime.frame()) : input); }
+                { std::lock_guard<std::mutex> lock(lifecycle.guard); runtime.tick(cancel_button.map(replay ? replay->input(runtime.frame()) : input)); }
                 audio.process(runtime.take_audio(), {runtime.number(9000100), runtime.number(9000101), runtime.number(9000102)});
                 accumulator -= 1.0 / fps;
                 input.mouse_left_new = input.mouse_right_new = false; input.wheel = 0;
@@ -478,8 +527,15 @@ int main(int argc, char** argv) {
             if (SDL_SetRenderTarget(renderer, nullptr) != 0) throw std::runtime_error(SDL_GetError());
             SDL_RenderSetLogicalSize(renderer, 0, 0);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
-            const SDL_FRect destination{display.x, display.y, display.w, display.h};
-            if (SDL_RenderCopyF(renderer, game_target->value, nullptr, &destination) != 0) throw std::runtime_error(SDL_GetError());
+            const SDL_Rect game_source{0, 0, width, height};
+            const SDL_FRect destination{display.game.x, display.game.y, display.game.w, display.game.h};
+            if (SDL_RenderCopyF(renderer, game_target->value, &game_source, &destination) != 0) throw std::runtime_error(SDL_GetError());
+            if (controls_visible) {
+                const SDL_Rect controls_source{0, height, width, presentation::controls_height};
+                const SDL_FRect controls_destination{display.controls.x, display.controls.y, display.controls.w, display.controls.h};
+                if (SDL_RenderCopyF(renderer, game_target->value, &controls_source, &controls_destination) != 0) throw std::runtime_error(SDL_GetError());
+            }
+            draw_controls_toggle(renderer, controls_toggle.bounds(display.safe, toggle_size));
             const bool captured = !capture_path.empty() && (runtime.frame() >= static_cast<std::uint64_t>(capture_target) || !runtime.error().empty());
             if (captured) capture_frame(renderer, capture_path.c_str(), runtime);
             SDL_RenderPresent(renderer);
